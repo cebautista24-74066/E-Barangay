@@ -1,0 +1,45 @@
+#!/usr/bin/env php
+<?php
+
+use Illuminate\Foundation\Application;
+use Symfony\Component\Console\Input\ArgvInput;
+
+define('LARAVEL_START', microtime(true));
+
+// Register the Composer autoloader...
+require __DIR__.'/vendor/autoload.php';
+
+$arguments = $_SERVER['argv'];
+
+if (($arguments[1] ?? null) === 'serve') {
+    $hasPortOption = false;
+    $hasNoReloadOption = false;
+
+    foreach (array_slice($arguments, 2) as $argument) {
+        if ($argument === '--port' || str_starts_with($argument, '--port=')) {
+            $hasPortOption = true;
+        }
+
+        if ($argument === '--no-reload') {
+            $hasNoReloadOption = true;
+        }
+    }
+
+    if (! $hasPortOption) {
+        $arguments[] = '--port=8123';
+    }
+
+    if (! $hasNoReloadOption) {
+        $arguments[] = '--no-reload';
+    }
+
+    $_SERVER['argv'] = $arguments;
+}
+
+// Bootstrap Laravel and handle the command...
+/** @var Application $app */
+$app = require_once __DIR__.'/bootstrap/app.php';
+
+$status = $app->handleCommand(new ArgvInput);
+
+exit($status);

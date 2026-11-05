@@ -1,0 +1,185 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\BarangayService;
+use App\Models\ServiceRequest;
+use App\Models\ServiceRequestFile;
+use App\Notifications\ServiceRequestStatusChanged;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
+
+class ServiceRequestController extends Controller
+{
+    public function index(Request $request): JsonResponse
+    {
+        $query = ServiceRequest::query()
+            ->with(['service:id,name', 'resident:id,name,email', 'files:id,service_request_id,original_name,mime_type,size', 'statusHistory.changedBy:id,name']);
+
+        if ($request->user()->role !== 'Administrator') {
+            $query->where('user_id', $request->user()->id);
+        }
+
+        if ($request->filled('status') && in_array($request->input('status'), ServiceRequest::STATUSES, true)) {
+            $query->where('status', $request->input('status'));
+        }
+
+        return response()->json([
+            'requests' => $query->latest()->get(),
+        ]);
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $data = Validator::make($request->all(), [
+            'service_id' => ['required', 'integer', 'exists:barangay_services,id'],
+            'purpose' => ['required', 'string', 'max:2000'],
+            'documents' => ['sometimes', 'array', 'max:5'],
+            'documents.*' => ['file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,doc,docx'],
+        ])->validate();
+
+        $service = BarangayService::query()
+            ->whereKey($data['service_id'])
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        $storedPaths = [];
+
+        try {
+            $serviceRequest = DB::transaction(function () use ($request, $data, $service, &$storedPaths): ServiceRequest {
+                $serviceRequest = ServiceRequest::create([
+                    'reference_code' => 'BRG-'.now()->format('Ymd').'-'.Str::upper(Str::random(8)),
+                    'user_id' => $request->user()->id,
+                    'barangay_service_id' => $service->id,
+                    'purpose' => $data['purpose'],
+                    'status' => 'Pending',
+                ]);
+
+                foreach ($request->file('documents', []) as $file) {
+                    $this->storeDocument($serviceRequest, $file, $storedPaths);
+                }
+
+                $serviceRequest->statusHistory()->create([
+                    'changed_by' => $request->user()->id,
+                    'from_status' => null,
+                    'to_status' => 'Pending',
+                    'note' => 'Request submitted.',
+                ]);
+
+                return $serviceRequest;
+            });
+        } catch (Throwable $exception) {
+            Storage::disk('local')->delete($storedPaths);
+            throw $exception;
+        }
+
+        return response()->json([
+            'request' => $this->loadRequest($serviceRequest),
+            'message' => 'Your request was submitted successfully.',
+        ], 201);
+    }
+
+    public function show(Request $request, ServiceRequest $serviceRequest): JsonResponse
+    {
+        $this->authorizeRequest($request, $serviceRequest);
+
+        return response()->json(['request' => $this->loadRequest($serviceRequest)]);
+    }
+
+    public function updateStatus(Request $request, ServiceRequest $serviceRequest): JsonResponse
+    {
+        abort_unless($request->user()->role === 'Administrator', 403);
+
+        $data = Validator::make($request->all(), [
+            'status' => ['required', 'in:'.implode(',', ServiceRequest::STATUSES)],
+            'admin_note' => ['nullable', 'string', 'max:2000'],
+        ])->validate();
+
+        $previousStatus = $serviceRequest->status;
+
+        DB::transaction(function () use ($request, $serviceRequest, $data, $previousStatus): void {
+            $serviceRequest->update([
+                'status' => $data['status'],
+                'admin_note' => $data['admin_note'] ?? null,
+            ]);
+
+            if ($previousStatus !== $data['status']) {
+                $serviceRequest->statusHistory()->create([
+                    'changed_by' => $request->user()->id,
+                    'from_status' => $previousStatus,
+                    'to_status' => $data['status'],
+                    'note' => $data['admin_note'] ?? null,
+                ]);
+            }
+        });
+
+        if ($previousStatus !== $data['status']) {
+            $serviceRequest->resident->notify(new ServiceRequestStatusChanged(
+                $serviceRequest->fresh(['service']),
+                $data['admin_note'] ?? null,
+            ));
+        }
+
+        return response()->json([
+            'request' => $this->loadRequest($serviceRequest->fresh()),
+            'message' => 'Request status updated.',
+        ]);
+    }
+
+    public function downloadFile(Request $request, ServiceRequestFile $file): StreamedResponse
+    {
+        $this->authorizeRequest($request, $file->serviceRequest);
+
+        abort_unless(Storage::disk('local')->exists($file->path), 404);
+
+        return Storage::disk('local')->download($file->path, $file->original_name);
+    }
+
+    private function storeDocument(ServiceRequest $serviceRequest, UploadedFile $file, array &$storedPaths): void
+    {
+        $extension = $file->guessExtension() ?: 'bin';
+        $path = $file->storeAs(
+            'service-requests/'.$serviceRequest->id,
+            Str::uuid().'.'.$extension,
+            'local',
+        );
+
+        if ($path === false) {
+            throw new \RuntimeException('Unable to store an uploaded request document.');
+        }
+
+        $storedPaths[] = $path;
+        $serviceRequest->files()->create([
+            'path' => $path,
+            'original_name' => $file->getClientOriginalName(),
+            'mime_type' => $file->getMimeType() ?: 'application/octet-stream',
+            'size' => $file->getSize(),
+        ]);
+    }
+
+    private function loadRequest(ServiceRequest $serviceRequest): ServiceRequest
+    {
+        return $serviceRequest->load([
+            'service:id,name,requirements,instructions',
+            'resident:id,name,email',
+            'files:id,service_request_id,original_name,mime_type,size',
+            'statusHistory.changedBy:id,name',
+        ]);
+    }
+
+    private function authorizeRequest(Request $request, ServiceRequest $serviceRequest): void
+    {
+        abort_unless(
+            $request->user()->role === 'Administrator'
+                || $request->user()->id === $serviceRequest->user_id,
+            403,
+        );
+    }
+}
