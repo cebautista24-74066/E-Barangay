@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/bis/style.css?v={{ filemtime(public_path('css/bis/style.css')) }}" />
   <link rel="stylesheet" href="/css/bis/requirements.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
   <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
@@ -25,7 +26,7 @@
         <a href="#how-it-works">How It Works</a>
       </nav>
       <div class="public-nav-actions">
-        <button class="theme-toggle" id="themeToggleLanding" type="button" aria-label="Switch to dark mode" title="Switch to dark mode">☾</button>
+        <button class="theme-toggle" id="themeToggleLanding" type="button" aria-label="Switch to dark mode" title="Switch to dark mode">☼</button>
         <button class="primary-btn public-login-trigger" type="button">Log in <span>→</span></button>
       </div>
     </header>
@@ -127,7 +128,7 @@
 
   <section id="loginView" class="public-login-screen hidden">
     <div class="login-glass-backdrop"></div>
-    <button class="theme-toggle login-theme-toggle" id="themeToggleLogin" type="button" aria-label="Switch to dark mode" title="Switch to dark mode">☾</button>
+    <button class="theme-toggle login-theme-toggle" id="themeToggleLogin" type="button" aria-label="Switch to dark mode" title="Switch to dark mode">☼</button>
     <div class="login-brand-panel">
       <div class="public-login-brand">
         <span class="public-brand-mark"><img src="/images/barangay-seal.png" alt="Barangay Humayingan seal"></span>
@@ -137,7 +138,7 @@
         <span class="login-welcome-eyebrow">BARANGAY HUMAYINGAN</span>
         <h1>Public service, closer to home.</h1>
         <p>Access barangay services, announcements, and updates in one convenient place.</p>
-        <div class="login-benefits"><span>◇ Transparency</span><span>✦ Community</span><span>✓ Easier services</span></div>
+        <div class="login-benefits"><span>•</span><span>✦ Community</span><span>✓ Easier services</span></div>
       </div>
     </div>
     <form id="loginForm" class="glass login-card showcase-login-card">
@@ -145,7 +146,7 @@
       <label for="loginName">Email Address</label>
       <div class="input-wrap"><span class="input-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4"></circle><path d="M4.5 20a7.5 7.5 0 0 1 15 0"></path></svg></span><input id="loginName" name="email" type="email" placeholder="Enter your email address" autocomplete="email" required></div>
       <label for="loginPassword">Password</label>
-      <div class="input-wrap"><span class="input-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path><circle cx="12" cy="15.5" r="1"></circle><path d="M12 16.5V18"></path></svg></span><input id="loginPassword" name="password" type="password" placeholder="Enter your password" autocomplete="current-password" required><button class="password-toggle" type="button" aria-label="Show password" aria-pressed="false">◉</button></div>
+      <div class="input-wrap"><span class="input-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path><circle cx="12" cy="15.5" r="1"></circle><path d="M12 16.5V18"></path></svg></span><input id="loginPassword" name="password" type="password" placeholder="Enter your password" autocomplete="current-password" required><button class="password-toggle" type="button" aria-label="Show password" aria-pressed="false"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg></button></div>
       <div class="remember-row"><label class="check"><input type="checkbox" name="remember" value="1"> Remember me</label><a href="#" id="forgotLink">Forgot password?</a></div>
       <button class="primary-btn full" type="submit">Login <span>→</span></button>
       <p id="loginFeedback" class="auth-feedback" role="alert" aria-live="polite"></p>
@@ -155,22 +156,22 @@
     <form id="registerForm" class="glass login-card showcase-login-card hidden">
       <h2>Create your account</h2><p class="muted">Register as a Barangay Humayingan resident.</p>
       <label for="registerName">Full Name</label>
-      <div class="input-wrap"><span>♙</span><input id="registerName" name="name" autocomplete="name" placeholder="Enter your full name" maxlength="255" required></div>
+      <div class="input-wrap"><span class="input-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="7" r="3"/><path d="M5 21a7 7 0 0 1 14 0"/></svg></span><input id="registerName" name="name" autocomplete="name" placeholder="Enter your full name" maxlength="255" required></div>
       <label for="registerEmail">Email Address</label>
-      <div class="input-wrap"><span>✉</span><input id="registerEmail" name="email" type="email" autocomplete="email" placeholder="Enter your email address" maxlength="255" required></div>
+      <div class="input-wrap"><span class="input-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span><input id="registerEmail" name="email" type="email" autocomplete="email" placeholder="Enter your email address" maxlength="255" required></div>
       <label for="registerPassword">Password</label>
-      <div class="input-wrap"><span>▣</span><input id="registerPassword" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" minlength="8" required></div>
+      <div class="input-wrap"><span class="input-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><input id="registerPassword" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" minlength="8" required></div>
       <label for="registerPasswordConfirmation">Confirm Password</label>
-      <div class="input-wrap"><span>▣</span><input id="registerPasswordConfirmation" name="password_confirmation" type="password" autocomplete="new-password" placeholder="Enter your password again" minlength="8" required></div>
+      <div class="input-wrap"><span class="input-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><input id="registerPasswordConfirmation" name="password_confirmation" type="password" autocomplete="new-password" placeholder="Enter your password again" minlength="8" required></div>
       <button class="primary-btn full" type="submit">Create Account <span>→</span></button>
       <p id="registerFeedback" class="auth-feedback" role="alert" aria-live="polite"></p>
       <p class="signup-line showcase-signup">Already registered? <a href="#" id="loginAgainLink">Log in</a></p>
       <button class="back-to-landing auth-back-home" type="button">← Back to home</button>
     </form>
     <form id="forgotPasswordForm" class="glass login-card showcase-login-card hidden">
-      <h2>Forgot password?</h2><p class="muted">We’ll use the same email address you entered on the login screen. To use your account’s registered email, go back and enter it there first.</p>
+      <h2>Forgot password?</h2><p class="muted">We'll use the same email address you entered on the login screen. To use your account's registered email, go back and enter it there first.</p>
       <label for="forgotEmail">Email Address</label>
-      <div class="input-wrap"><span>✉</span><input id="forgotEmail" name="email" type="email" autocomplete="email" placeholder="Return to login and enter your account email" maxlength="255" readonly required></div>
+      <div class="input-wrap"><span>•</span><input id="forgotEmail" name="email" type="email" autocomplete="email" placeholder="Return to login and enter your account email" maxlength="255" readonly required></div>
       <button class="primary-btn full" type="submit" disabled>Send Reset Link <span>→</span></button>
       <p id="forgotFeedback" class="auth-feedback" role="status" aria-live="polite"></p>
       <p class="signup-line showcase-signup"><a href="#" id="forgotLoginLink">← Back to log in</a></p>
@@ -179,11 +180,11 @@
       <h2>Set a new password</h2><p class="muted">Choose a new password with at least 8 characters.</p>
       <input id="resetToken" name="token" type="hidden">
       <label for="resetEmail">Email Address</label>
-      <div class="input-wrap"><span>✉</span><input id="resetEmail" name="email" type="email" autocomplete="email" placeholder="Enter your email address" maxlength="255" required></div>
+      <div class="input-wrap"><span>•</span><input id="resetEmail" name="email" type="email" autocomplete="email" placeholder="Enter your email address" maxlength="255" required></div>
       <label for="newPassword">New Password</label>
-      <div class="input-wrap"><span>▣</span><input id="newPassword" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" minlength="8" required></div>
+      <div class="input-wrap"><span class="input-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><input id="newPassword" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" minlength="8" required></div>
       <label for="newPasswordConfirmation">Confirm New Password</label>
-      <div class="input-wrap"><span>▣</span><input id="newPasswordConfirmation" name="password_confirmation" type="password" autocomplete="new-password" placeholder="Enter your new password again" minlength="8" required></div>
+      <div class="input-wrap"><span class="input-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><input id="newPasswordConfirmation" name="password_confirmation" type="password" autocomplete="new-password" placeholder="Enter your new password again" minlength="8" required></div>
       <button class="primary-btn full" type="submit">Reset Password <span>→</span></button>
       <p id="resetFeedback" class="auth-feedback" role="alert" aria-live="polite"></p>
       <p class="signup-line showcase-signup"><a href="#" id="resetLoginLink">← Back to log in</a></p>
@@ -192,16 +193,17 @@
   </section>
 
   <div id="appView" class="app-shell hidden">
+    <div id="mobileNavOverlay" class="mobile-nav-overlay hidden"></div>
     <aside class="sidebar glass-dark">
       <a class="brand compact" href="#" data-page="Dashboard"><div class="brand-mark small has-logo"><img src="/images/barangay-seal.png" alt="Barangay Humayingan logo"></div><div><strong>E-Barangay</strong><small>Humayingan</small></div></a>
       <nav id="navMenu"></nav>
-      <div class="sidebar-bottom"><div class="help-box"><span>✦</span><b>Need help?</b><small>Contact the Barangay Office for assistance.</small><button data-page="Help">Contact us →</button></div><button class="nav-link" id="settingsBtn"><span>⚙</span> Settings</button><button class="nav-link" id="logoutBtn"><span>↪</span> Log out</button></div>
+      <div class="sidebar-bottom"><div class="help-box"><span>✦</span><b>Need help?</b><small>Contact the Barangay Office for assistance.</small><button data-page="Help">Contact us →</button></div><button class="nav-link" id="settingsBtn"><span class="nav-icon"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 15a2 2 0 0 0 .4 2.2l.1.1-1.8 1.8-.1-.1A2 2 0 0 0 15 19a2 2 0 0 0-1.8 1.7V21h-2.5v-.3A2 2 0 0 0 9 19a2 2 0 0 0-2.3 0l-.1.1-1.8-1.8.1-.1A2 2 0 0 0 5 15a2 2 0 0 0-1.7-1.8H3v-2.5h.3A2 2 0 0 0 5 9a2 2 0 0 0-.1-2.3l-.1-.1 1.8-1.8.1.1A2 2 0 0 0 9 5a2 2 0 0 0 1.8-1.7V3h2.5v.3A2 2 0 0 0 15 5a2 2 0 0 0 2.3 0l.1-.1 1.8 1.8-.1.1A2 2 0 0 0 19 9a2 2 0 0 0 1.7 1.8h.3v2.5h-.3A2 2 0 0 0 19 15Z"/></svg></span> Settings</button><button class="nav-link" id="logoutBtn"><span class="nav-icon"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M10 17l5-5-5-5M15 12H3M21 4v16"/></svg></span> Log out</button></div>
     </aside>
     <main class="main-area">
       <header class="topbar glass">
-        <div class="mobile-brand"><div class="brand-mark small has-logo"><img src="/images/barangay-seal.png" alt="Barangay Humayingan logo"></div><b>E-Barangay</b></div>
+        <div class="mobile-brand"><button id="mobileMenuBtn" class="mobile-menu-btn" type="button" aria-label="Open navigation" aria-expanded="false"><span></span><span></span><span></span></button><div class="brand-mark small has-logo"><img src="/images/barangay-seal.png" alt="Barangay Humayingan logo"></div><b>E-Barangay</b></div>
         <div class="breadcrumb"><span>Workspace</span><span class="crumb-sep">/</span><b id="currentCrumb">Dashboard</b></div>
-        <div class="top-actions"><button class="theme-toggle" id="themeToggleApp" type="button" aria-label="Switch to dark mode" title="Switch to dark mode">☾</button><button class="icon-btn" id="notificationBtn" title="Notifications" aria-label="Notifications">♧<i hidden></i></button><div class="top-user"><div class="avatar tiny" id="topAvatar">B</div><div><b id="topName">Account</b><small id="topRole">User</small></div><button id="userMenuBtn">⌄</button></div></div>
+        <div class="top-actions"><button class="theme-toggle" id="themeToggleApp" type="button" aria-label="Switch to dark mode" title="Switch to dark mode">☼</button><button class="icon-btn" id="notificationBtn" title="Notifications" aria-label="Notifications"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/></svg><i hidden></i></button><div class="top-user"><div class="avatar tiny" id="topAvatar">B</div><div><b id="topName">Account</b><small id="topRole">User</small></div><div id="profileMenu" class="profile-menu hidden"><button data-action="edit-profile">Edit Profile</button><button data-action="change-password">Change Password</button><button data-action="account-settings">Account Settings</button><button data-action="profile-logout">Log out</button></div></div></div>
       </header>
       <div id="pageContent" class="page-content"></div>
       <footer>© <span id="year"></span> Barangay Humayingan · E-Barangay Portal <span>Built for better community service</span></footer>
@@ -209,6 +211,7 @@
   </div>
   <div id="toast" class="toast"></div>
   <div id="modalLayer" class="modal-layer hidden"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/js/bis/app.js?v={{ filemtime(public_path('js/bis/app.js')) }}"></script>
 </body>
 </html>

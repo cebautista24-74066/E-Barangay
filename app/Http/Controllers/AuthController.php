@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Validator;
@@ -92,6 +93,27 @@ class AuthController extends Controller
         ]);
     }
 
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $data = Validator::make($request->all(), [
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $user->id],
+        ])->validate();
+        $user->update(['name' => trim($data['name']), 'email' => strtolower(trim($data['email']))]);
+        return response()->json(['message' => 'Profile updated.', 'user' => $this->userPayload($user->fresh()), 'csrf_token' => csrf_token()]);
+    }
+
+    public function changePassword(Request $request): JsonResponse
+    {
+        $data = Validator::make($request->all(), [
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ])->validate();
+        abort_unless(Hash::check($data['current_password'], $request->user()->password), 422, 'The current password is incorrect.');
+        $request->user()->update(['password' => $data['password']]);
+        return response()->json(['message' => 'Password changed successfully.']);
+    }
     public function sendPasswordResetLink(Request $request): JsonResponse
     {
         $request->merge([

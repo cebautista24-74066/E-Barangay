@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminResidentController;
 use App\Http\Controllers\AnnouncementController;
+use App\Http\Controllers\DrrmController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BarangayServiceController;
 use App\Http\Controllers\NotificationController;
@@ -30,13 +31,23 @@ Route::get('/auth/session', [AuthController::class, 'session'])
     ->middleware(EnsureActiveAccount::class)
     ->name('auth.session');
 Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
+Route::middleware(['auth', EnsureActiveAccount::class])->group(function () {
+    Route::patch('/api/profile', [AuthController::class, 'updateProfile']);
+    Route::post('/api/profile/password', [AuthController::class, 'changePassword']);
+});
 Route::middleware(['auth', EnsureActiveAccount::class])
     ->get('/admin/residents', [AuthController::class, 'residents'])
     ->name('admin.residents');
 
 Route::middleware(['auth', EnsureActiveAccount::class])->group(function () {
     Route::get('/api/residents', [AdminResidentController::class, 'index']);
+    Route::post('/api/residents', [AdminResidentController::class, 'store']);
     Route::patch('/api/residents/{user}', [AdminResidentController::class, 'update']);
+    Route::delete('/api/residents/{user}', [AdminResidentController::class, 'destroy']);
+    Route::get('/api/admin/users/admins', [AdminResidentController::class, 'admins']);
+    Route::post('/api/admin/users/admin', [AdminResidentController::class, 'storeAdmin']);
+    Route::patch('/api/admin/users/admins/{user}/status', [AdminResidentController::class, 'toggleAdminStatus']);
+    Route::delete('/api/admin/users/admins/{user}', [AdminResidentController::class, 'destroyAdmin']);
 
     Route::get('/api/announcements', [AnnouncementController::class, 'index']);
     Route::post('/api/announcements', [AnnouncementController::class, 'store']);
@@ -46,6 +57,7 @@ Route::middleware(['auth', EnsureActiveAccount::class])->group(function () {
     Route::get('/api/services', [BarangayServiceController::class, 'index']);
     Route::post('/api/services', [BarangayServiceController::class, 'store']);
     Route::put('/api/services/{service}', [BarangayServiceController::class, 'update']);
+    Route::patch('/api/services/{service}/status', [BarangayServiceController::class, 'toggleStatus']);
     Route::delete('/api/services/{service}', [BarangayServiceController::class, 'destroy']);
 
     Route::get('/api/requests', [ServiceRequestController::class, 'index']);
@@ -63,4 +75,12 @@ Route::middleware(['auth', EnsureActiveAccount::class])->group(function () {
 
     Route::get('/api/admin/reports', [ReportController::class, 'index']);
     Route::get('/api/admin/reports/requests.csv', [ReportController::class, 'exportRequests']);
+
+    Route::get('/api/admin/drrm', [DrrmController::class, 'index']);
+    Route::post('/api/admin/drrm/households', [DrrmController::class, 'storeHousehold']);
+    Route::post('/api/admin/drrm/evacuation-centers', [DrrmController::class, 'storeCenter']);
+    Route::patch('/api/admin/drrm/households/{household}', [DrrmController::class, 'updateHousehold']);
+    Route::delete('/api/admin/drrm/households/{household}', [DrrmController::class, 'destroyHousehold']);
+    Route::patch('/api/admin/drrm/evacuation-centers/{center}', [DrrmController::class, 'updateCenter']);
+    Route::delete('/api/admin/drrm/evacuation-centers/{center}', [DrrmController::class, 'destroyCenter']);
 });

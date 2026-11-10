@@ -14,6 +14,8 @@ class Announcement extends Model
         'category',
         'is_published',
         'published_at',
+        'event_date',
+        'event_time',
     ];
 
     protected function casts(): array
@@ -21,6 +23,8 @@ class Announcement extends Model
         return [
             'is_published' => 'boolean',
             'published_at' => 'datetime',
+            'event_date' => 'date:Y-m-d',
+            'event_time' => 'string',
         ];
     }
 

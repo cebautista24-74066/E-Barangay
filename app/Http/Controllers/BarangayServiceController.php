@@ -39,7 +39,15 @@ class BarangayServiceController extends Controller
         return response()->json(['service' => $service->fresh()]);
     }
 
-    public function destroy(Request $request, BarangayService $service): JsonResponse
+        public function toggleStatus(Request $request, BarangayService $service): JsonResponse
+    {
+        $this->authorizeAdministrator($request);
+        $data = $request->validate(['is_active' => ['required', 'boolean']]);
+        $service->update(['is_active' => $data['is_active']]);
+
+        return response()->json(['service' => $service->fresh()]);
+    }
+public function destroy(Request $request, BarangayService $service): JsonResponse
     {
         $this->authorizeAdministrator($request);
 

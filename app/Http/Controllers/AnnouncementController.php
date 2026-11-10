@@ -69,6 +69,8 @@ class AnnouncementController extends Controller
             'category' => ['required', 'in:General,Community,System,Event'],
             'is_published' => ['required', 'boolean'],
             'published_at' => ['nullable', 'date'],
+            'event_date' => ['nullable', 'date'],
+            'event_time' => ['nullable', 'date_format:H:i'],
         ])->validate();
     }
 
