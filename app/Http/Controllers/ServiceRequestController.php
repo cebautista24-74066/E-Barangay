@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BarangayService;
+use App\Services\AuditLogger;
 use App\Models\ServiceRequest;
 use App\Models\ServiceRequestFile;
 use App\Notifications\ServiceRequestStatusChanged;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Throwable;
 
 class ServiceRequestController extends Controller
@@ -21,18 +22,27 @@ class ServiceRequestController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = ServiceRequest::query()
-            ->with(['service:id,name', 'resident:id,name,email', 'files:id,service_request_id,original_name,mime_type,size', 'statusHistory.changedBy:id,name']);
+            ->with(['service:id,name', 'resident:id,name,email', 'files:id,service_request_id,original_name,mime_type,size,path', 'statusHistory.changedBy:id,name']);
 
         if ($request->user()->role !== 'Administrator') {
             $query->where('user_id', $request->user()->id);
-        }
 
+        }
         if ($request->filled('status') && in_array($request->input('status'), ServiceRequest::STATUSES, true)) {
             $query->where('status', $request->input('status'));
         }
 
+        $requests = $query->latest()->get();
+        $requests->each(function (ServiceRequest $item): void {
+            $item->files->each(function (ServiceRequestFile $file): void {
+                if (str_starts_with((string) $file->mime_type, 'image/') && Storage::disk('local')->exists($file->path)) {
+                    $file->preview_url = 'data:'.$file->mime_type.';base64,'.base64_encode(Storage::disk('local')->get($file->path));
+                }
+            });
+        });
+
         return response()->json([
-            'requests' => $query->latest()->get(),
+            'requests' => $requests,
         ]);
     }
 
@@ -110,7 +120,7 @@ class ServiceRequestController extends Controller
                 'admin_note' => $data['admin_note'] ?? null,
             ]);
 
-            if ($previousStatus !== $data['status']) {
+            if ($previousStatus !== $data["status"]) {
                 $serviceRequest->statusHistory()->create([
                     'changed_by' => $request->user()->id,
                     'from_status' => $previousStatus,
@@ -120,12 +130,25 @@ class ServiceRequestController extends Controller
             }
         });
 
-        if ($previousStatus !== $data['status']) {
+            AuditLogger::record(
+                $request,
+                "status_changed",
+                "service_requests",
+                "Service request status changed from ".($previousStatus ?: "None")." to ".$data["status"],
+                [
+                    "subject" => $serviceRequest,
+                    "old_values" => ["status" => $previousStatus],
+                    "new_values" => [
+                        "status" => $data["status"],
+                        "admin_note" => $data["admin_note"] ?? null,
+                    ],
+                ],
+            );
+
             $serviceRequest->resident->notify(new ServiceRequestStatusChanged(
                 $serviceRequest->fresh(['service']),
                 $data['admin_note'] ?? null,
             ));
-        }
 
         return response()->json([
             'request' => $this->loadRequest($serviceRequest->fresh()),
@@ -133,13 +156,13 @@ class ServiceRequestController extends Controller
         ]);
     }
 
-    public function downloadFile(Request $request, ServiceRequestFile $file): StreamedResponse
+    public function downloadFile(Request $request, ServiceRequestFile $file): BinaryFileResponse
     {
         $this->authorizeRequest($request, $file->serviceRequest);
 
         abort_unless(Storage::disk('local')->exists($file->path), 404);
 
-        return Storage::disk('local')->download($file->path, $file->original_name);
+        return response()->file(Storage::disk('local')->path($file->path), ['Content-Disposition' => 'inline']);
     }
 
     private function storeDocument(ServiceRequest $serviceRequest, UploadedFile $file, array &$storedPaths): void
@@ -166,13 +189,20 @@ class ServiceRequestController extends Controller
 
     private function loadRequest(ServiceRequest $serviceRequest): ServiceRequest
     {
-        return $serviceRequest->load([
+        $loaded = $serviceRequest->load([
             'service:id,name,requirements,instructions',
             'resident:id,name,email',
-            'files:id,service_request_id,original_name,mime_type,size',
+            'files:id,service_request_id,original_name,mime_type,size,path',
             'statusHistory.changedBy:id,name',
         ]);
-    }
+
+        $loaded->files->each(function (ServiceRequestFile $file): void {
+            if (str_starts_with((string) $file->mime_type, 'image/') && Storage::disk('local')->exists($file->path)) {
+                $file->preview_url = 'data:'.$file->mime_type.';base64,'.base64_encode(Storage::disk('local')->get($file->path));
+            }
+        });
+
+        return $loaded;    }
 
     private function authorizeRequest(Request $request, ServiceRequest $serviceRequest): void
     {

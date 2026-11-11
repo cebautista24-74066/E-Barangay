@@ -41,7 +41,7 @@ class DrrmController extends Controller
     {
         $this->admin($request);
         $data = Validator::make($request->all(), [
-            'household_number' => ['required', 'string', 'max:50', 'unique:drrm_households,household_number'], 'location_type' => ['required', 'in:House,Evacuation Center,School,Covered Court'],
+            'household_number' => ['required', 'string', 'max:50', 'unique:drrm_households,household_number'],
             'address' => ['required', 'string', 'max:255'], 'sitio' => ['nullable', 'string', 'max:100'], 'landmark' => ['nullable', 'string', 'max:255'],
             'latitude' => ['required', 'numeric', 'between:-90,90'], 'longitude' => ['required', 'numeric', 'between:-180,180'],
             'notes' => ['nullable', 'string', 'max:2000'], 'resident_count' => ['required', 'integer', 'min:0'], 'senior_count' => ['nullable', 'integer', 'min:0'], 'pwd_count' => ['nullable', 'integer', 'min:0'], 'bedridden_count' => ['nullable', 'integer', 'min:0'], 'pregnant_count' => ['nullable', 'integer', 'min:0'], 'infant_count' => ['nullable', 'integer', 'min:0'], 'transport_assistance_count' => ['nullable', 'integer', 'min:0'], 'members' => ['array'],
@@ -50,6 +50,7 @@ class DrrmController extends Controller
             'members.*.is_pregnant' => ['boolean'], 'members.*.has_infant' => ['boolean'], 'members.*.needs_transport' => ['boolean'],
             'members.*.medical_needs' => ['nullable', 'string', 'max:1000'],
         ])->validate();
+        $data['location_type'] = 'House';
         $household = DB::transaction(function () use ($data) {
             $household = DrrmHousehold::create(collect($data)->except('members')->all());
             $household->members()->createMany($data['members'] ?? []);

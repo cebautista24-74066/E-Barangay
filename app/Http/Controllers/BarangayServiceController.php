@@ -39,7 +39,27 @@ class BarangayServiceController extends Controller
         return response()->json(['service' => $service->fresh()]);
     }
 
-        public function toggleStatus(Request $request, BarangayService $service): JsonResponse
+        public function updateTemplate(Request $request, BarangayService $service): JsonResponse
+    {
+        $this->authorizeAdministrator($request);
+        $data = $request->validate([
+            'template_title' => ['required', 'string', 'max:255'],
+            'template_body' => ['required', 'string', 'max:10000'],
+            'template_footer' => ['nullable', 'string', 'max:2000'],
+            'template_signature_name' => ['nullable', 'string', 'max:255'],
+            'template_signature_position' => ['nullable', 'string', 'max:255'],
+            'template_primary_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'template_layout' => ['nullable', 'array', 'max:30'],
+            'template_layout.*.type' => ['required_with:template_layout', 'string', 'in:text,logo,lian_logo,resident_name,service_name,reference_code,approved_date,purpose,signature,qr'],
+            'template_layout.*.x' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'template_layout.*.y' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'template_layout.*.text' => ['nullable', 'string', 'max:1000'],
+        ]);
+        $service->update($data);
+        return response()->json(['service' => $service->fresh(), 'message' => 'Document template saved.']);
+    }
+
+    public function toggleStatus(Request $request, BarangayService $service): JsonResponse
     {
         $this->authorizeAdministrator($request);
         $data = $request->validate(['is_active' => ['required', 'boolean']]);

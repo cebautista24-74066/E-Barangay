@@ -15,11 +15,18 @@ class BarangayService extends Model
         'requirements',
         'instructions',
         'is_active',
+        'template_title',
+        'template_body',
+        'template_footer',
+        'template_signature_name',
+        'template_signature_position',
+        'template_primary_color',
+        'template_layout',
     ];
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return ['is_active' => 'boolean', 'template_layout' => 'array'];
     }
 
     public function author(): BelongsTo

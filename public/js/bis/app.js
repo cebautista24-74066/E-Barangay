@@ -31,6 +31,7 @@ const residentNav = [
   ["My Profile", "user"],
   ["E-Services", "services"],
   ["My Requests", "requests"],
+  ["My Activity", "reports"],
   ["Notifications", "bell"],
   ["Complaints & Feedback", "feedback"],
   ["Announcements", "announcement"],
@@ -45,6 +46,7 @@ const adminNav = [
   ["Complaints & Feedback", "feedback"],
   ["Events", "events"],
   ["Reports", "reports"],
+  ["Audit Logs", "reports"],
   ["DRRM Map", "map"]
 ];
 
@@ -282,7 +284,7 @@ function moduleCard(title, description, icon, target, metric, tone = "") {
   return `<button class="dashboard-module ${tone}" data-page="${escapeHtml(target)}">
     <span class="dashboard-module-icon">${icon}</span>
     <span class="dashboard-module-copy"><b>${escapeHtml(title)}</b><small>${escapeHtml(description)}</small></span>
-    <span class="dashboard-module-meta"><strong>${escapeHtml(metric)}</strong><span>Open module →</span></span>
+    <span class="dashboard-module-meta"><strong>${escapeHtml(metric)}</strong><span>Open</span></span>
   </button>`;
 }
 
@@ -345,6 +347,7 @@ function dashboard() {
       moduleCard("Announcements", "Publish barangay updates", uiIcon("announcement"), "Announcements", announcements.length, "purple"),
       moduleCard("Complaints & Feedback", "Review community concerns", uiIcon("feedback"), "Complaints & Feedback", openFeedback, "rose"),
       moduleCard("Reports", "Request activity and CSV export", uiIcon("reports"), "Reports", "View reports", "teal"),
+      moduleCard("Audit Logs", "Review system activity", uiIcon("reports"), "Audit Logs", "View logs", "slate"),
       moduleCard("System Information", "Account and display settings", uiIcon("settings"), "Settings", "Settings", "slate")
     ].join("")
     : [
@@ -367,17 +370,17 @@ function dashboard() {
     : "<th>Reference</th><th>Service</th><th>Status</th>";
 
   return `${heading(greetingTitle(), "Here's what's happening in your barangay.")}
-    <div class="hero"><div><span class="eyebrow" style="color:#397bb9">BARANGAY HUMAYINGAN</span><h2>A safer, cleaner, stronger community.</h2><p>Access local information, selected barangay services, and request updates in one place.</p></div><div class="hero-badge"><b>✓ Community first</b>Transparent services. Better connections. One barangay.</div></div>
+    <div class="hero"><div><span class="eyebrow" style="color:#397bb9">BARANGAY HUMAYINGAN</span><h2>A safer, cleaner, stronger community.</h2><p>Access local information, selected barangay services, and request updates in one place.</p></div><div class="hero-badge"><b>Community first</b>Transparent services. Better connections. One barangay.</div></div>
     ${stats}
     <section class="dashboard-module-section">
       <div class="dashboard-section-heading"><div><span class="eyebrow">YOUR WORKSPACE</span><h2>${mode === "admin" ? "Administration Modules" : "Resident Services"}</h2><p>${mode === "admin" ? "Choose a module to manage barangay information and service activity." : "Choose a service to submit requests, follow updates, and connect with your barangay."}</p></div></div>
       <div class="dashboard-module-grid">${modules}</div>
     </section>
     <div class="dashboard-columns">
-      <section class="panel"><div class="panel-head"><h3>${mode === "admin" ? "Recent Service Requests" : "My Recent Requests"}</h3><a href="#" data-page="${mode === "admin" ? "Manage Requests" : "My Requests"}">View all →</a></div>
+      <section class="panel"><div class="panel-head"><h3>${mode === "admin" ? "Recent Service Requests" : "My Recent Requests"}</h3><a href="#" data-page="${mode === "admin" ? "Manage Requests" : "My Requests"}">View all</a></div>
         <div class="table-wrap"><table><thead><tr>${requestColumns}</tr></thead><tbody>${recentRequests}</tbody></table></div>
         ${requests.length ? "" : emptyState("No requests yet", "Service requests will appear here once submitted.")}</section>
-      <section class="panel"><div class="panel-head"><h3>Recent Announcements</h3><a href="#" data-page="Announcements">View all →</a></div><div class="announcement-list">${announcements.slice(0, 3).map(item => announcementMarkup(item)).join("") || emptyState("No announcements yet", "New barangay notices will appear here.")}</div></section>
+      <section class="panel"><div class="panel-head"><h3>Recent Announcements</h3><a href="#" data-page="Announcements">View all</a></div><div class="announcement-list">${announcements.slice(0, 3).map(item => announcementMarkup(item)).join("") || emptyState("No announcements yet", "New barangay notices will appear here.")}</div></section>
     </div>`;
 }
 
@@ -396,7 +399,7 @@ function servicesPage() {
     ${service.requirements ? `<p><b>Requirements</b><br>${escapeHtml(service.requirements).replace(/\n/g, "<br>")}</p>` : ""}
     ${service.instructions ? `<p><b>Procedure</b><br>${escapeHtml(service.instructions).replace(/\n/g, "<br>")}</p>` : ""}
     ${admin
-      ? `<div class="table-actions">${button("Edit", "edit-service", "secondary-btn sm", `data-id="${service.id}"`)}${button(service.is_active ? "Deactivate" : "Activate", "toggle-service", "secondary-btn sm", `data-id="${service.id}" data-active="${service.is_active}"`)}${button("Delete", "delete-service", "danger-btn sm", `data-id="${service.id}"`)}</div>`
+      ? `<div class="service-actions-menu"><button type="button" class="service-more-btn" data-action="toggle-service-menu" aria-label="More service actions">⋮</button><div class="service-actions-options hidden">${button("Edit", "edit-service", "service-action-option", `data-id="${service.id}"`)}${button(service.is_active ? "Deactivate" : "Activate", "toggle-service", "service-action-option", `data-id="${service.id}" data-active="${service.is_active}"`)}${button("Edit Template", "edit-template", "service-action-option", `data-id="${service.id}"`)}${button("Delete", "delete-service", "danger-btn service-action-option", `data-id="${service.id}"`)}</div></div>`
       : button("Request this service →", "request-service", "primary-btn sm", `data-id="${service.id}"`)}
   </article>`).join("");
   return `${heading(admin ? "Manage E-Services" : "E-Services", admin ? "Publish and maintain the barangay's official services and requirements." : "Review official service requirements and submit selected requests.", admin ? button("+ Add Service", "new-service") : "")}
@@ -411,12 +414,12 @@ function requestsPage(admin = false) {
     <td>${escapeHtml(request.service?.name || "")}</td>
     <td>${escapeHtml(new Date(request.created_at).toLocaleDateString())}</td>
     <td>${statusBadge(request.status)}</td>
-    <td>${button("Details", "request-details", "secondary-btn sm", `data-id="${request.id}"`)}</td>
+    <td>${button("Details", "request-details", "secondary-btn sm", `data-id="${request.id}"`)}</td>\n    ${!admin ? `<td class="request-download-cell"><div class="download-menu"><button type="button" class="secondary-btn sm download-toggle" data-action="toggle-download-menu" ${request.status !== "Approved" ? "disabled" : ""}>Download <span>▾</span></button><div class="download-menu-options hidden">${button("Download as PDF", "download-request", "download-option", `data-id="${request.id}" data-format="pdf"`)}${button("Download as PNG", "download-request", "download-option", `data-id="${request.id}" data-format="png"`)}</div></div></td>` : ""}
   </tr>`).join("");
   const statusOptions = [`<option value="">All statuses</option>`, ...requestStatuses.map(status => `<option>${status}</option>`)].join("");
   return `${heading(admin ? "Manage Requests" : "My Requests", admin ? "Review submissions and record request status updates." : "Track the status and history of your requests.", admin ? "" : button("+ New Request", "new-request"))}
     <section class="panel"><div class="filters"><input id="requestSearch" placeholder="Search reference, resident, or service..."><select id="requestStatus">${statusOptions}</select></div>
-    <div class="table-wrap"><table><thead><tr><th>Reference</th>${admin ? "<th>Resident</th>" : ""}<th>Service</th><th>Date Submitted</th><th>Status</th><th>Details</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="table-wrap"><table><thead><tr><th>Reference</th>${admin ? "<th>Resident</th>" : ""}<th>Service</th><th>Date Submitted</th><th>Status</th><th>Details</th>${!admin ? "<th>Download</th>" : ""}</tr></thead><tbody>${rows}</tbody></table></div>
     ${requests.length ? "" : emptyState("No requests yet", "Submitted service requests and their status history will appear here.")}</section>`;
 }
 
@@ -436,13 +439,13 @@ function eventsPage() {
 function drrmPage() {
   const drrm = pageData.drrm || { households: [], evacuation_centers: [], summary: {} }; const summary = drrm.summary || {};
   const capacity = Number(summary.evacuation_capacity || 0); const occupied = Number(summary.evacuation_occupied || 0); const available = Math.max(0, capacity - occupied);
-  const rows = drrm.households.map(item => `<tr data-drrm-row="household" data-id="${item.id}"><td>${escapeHtml(item.household_number)}</td><td>${escapeHtml(item.address)}</td><td>${escapeHtml(item.sitio || item.purok || '')}</td><td>${escapeHtml(item.location_type || 'House')}</td><td>${statusBadge(item.priority_level)}</td><td>${item.resident_count || item.members?.length || 0}</td><td><div class="table-actions">${button('Edit', 'edit-drrm-household', 'secondary-btn sm', `data-id="${item.id}"`)}${button('Delete', 'delete-drrm-household', 'danger-btn sm', `data-id="${item.id}"`)}</div></td></tr>`).join('');
+  const rows = drrm.households.map(item => `<tr data-drrm-row="household" data-id="${item.id}"><td>${escapeHtml(item.household_number)}</td><td>${escapeHtml(item.address)}</td><td>${escapeHtml(item.sitio || item.purok || '')}</td><td>${statusBadge(item.priority_level)}</td><td>${item.resident_count || item.members?.length || 0}</td><td><div class="table-actions">${button('Edit', 'edit-drrm-household', 'secondary-btn sm', `data-id="${item.id}"`)}${button('Delete', 'delete-drrm-household', 'danger-btn sm', `data-id="${item.id}"`)}</div></td></tr>`).join('');
   const centerRows = drrm.evacuation_centers.map(center => { const cap = Number(center.capacity || 0); const occ = Number(center.current_occupants || 0); const free = Math.max(0, cap - occ); return `<tr><td>${escapeHtml(center.name)}</td><td>${cap || 'N/A'}</td><td>${occ}</td><td>${cap ? free : 'N/A'}</td><td>${statusBadge(center.status || (free === 0 ? 'Full' : 'Open'))}</td><td><div class="table-actions">${button('Edit', 'edit-drrm-center', 'secondary-btn sm', `data-id="${center.id}"`)}${button('Delete', 'delete-drrm-center', 'danger-btn sm', `data-id="${center.id}"`)}</div></td></tr>`; }).join('');
   const drrmIcons = { households: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10Z"/><path d="M9 21v-6h6v6"/></svg>', priority: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 21 19H3L12 3Z"/><path d="M12 9v4M12 16h.01"/></svg>', vulnerable: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M10 8h3l1 4h-3l-1 4h5a4 4 0 1 1-1 2"/><path d="M10 8 8 12l-3 1"/><circle cx="15" cy="19" r="1.5"/></svg>', slots: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/><circle cx="12" cy="12" r="9"/></svg>' };
   return `${heading('DRRM Priority Map', 'Monitor vulnerable households and evacuation capacity from one map.', button('+ Add Household', 'new-household') + button('+ Add Center', 'new-drrm-center') + button('Refresh map', 'refresh'))}
     <div class="stats-grid drrm-summary">${stat('Total households', summary.total_households || 0, drrmIcons.households, 'blue')}${stat('Vulnerable residents', summary.total_vulnerable_residents || 0, drrmIcons.vulnerable, 'purple')}${stat('Available evacuation slots', available, drrmIcons.slots, 'green')}</div>
     <section class="panel drrm-map-panel"><div class="drrm-map-toolbar"><div class="drrm-mode-buttons"><button class="secondary-btn sm" data-action="drrm-view-mode">View Only</button><button class="secondary-btn sm" data-action="drrm-select-mode">Select Location</button></div><div class="drrm-map-actions"><button class="secondary-btn sm" data-action="drrm-locate">Locate me</button><button class="secondary-btn sm" data-action="drrm-fit">Zoom to markers</button><button class="secondary-btn sm" data-action="drrm-fullscreen">Fullscreen</button></div></div><div id="drrmMap" style="height:520px;border-radius:16px;overflow:hidden"></div></section>
-    <section class="panel"><div class="filters drrm-filters"><input id="drrmSearch" placeholder="Search household, address, or sitio..."><select id="drrmPriority"><option value="">All priorities</option><option>Critical</option><option>High</option><option>Moderate</option><option>Low</option></select><select id="drrmLocationType"><option value="">All location types</option><option>House</option><option>School</option><option>Covered Court</option><option>Evacuation Center</option></select></div><div class="panel-head"><h3>Priority Households</h3></div><div class="table-wrap"><table><thead><tr><th>Household</th><th>Address</th><th>Sitio/Purok</th><th>Type</th><th>Priority</th><th>Residents</th><th>Actions</th></tr></thead><tbody>${rows || `<tr><td colspan="7">No DRRM household records yet.</td></tr>`}</tbody></table></div></section>
+    <section class="panel"><div class="filters drrm-filters"><input id="drrmSearch" placeholder="Search household, address, or sitio..."><select id="drrmPriority"><option value="">All priorities</option><option>Critical</option><option>High</option><option>Moderate</option><option>Low</option></select></div><div class="panel-head"><h3>Priority Households</h3></div><div class="table-wrap"><table><thead><tr><th>Household</th><th>Address</th><th>Sitio/Purok</th><th>Priority</th><th>Residents</th><th>Actions</th></tr></thead><tbody>${rows || `<tr><td colspan="6">No DRRM household records yet.</td></tr>`}</tbody></table></div></section>
     <section class="panel"><div class="panel-head"><h3>Evacuation Capacity</h3><span class="muted">${summary.evacuation_centers || 0} active centers</span></div><div class="table-wrap"><table><thead><tr><th>Center</th><th>Capacity</th><th>Occupied</th><th>Available</th><th>Status</th><th>Actions</th></tr></thead><tbody>${centerRows || '<tr><td colspan="6">No evacuation centers.</td></tr>'}</tbody></table></div></section>`;
 }
 
@@ -459,12 +462,12 @@ function renderDrrmMap() {
   window.drrmMapActions = { map, householdLayer, householdMarkers, centerLayer, setMode, fit: () => { const group = L.featureGroup([householdLayer, centerLayer]); if (group.getLayers().length) map.fitBounds(group.getBounds().pad(.1)); }, locate: () => navigator.geolocation?.getCurrentPosition(pos => map.setView([pos.coords.latitude, pos.coords.longitude], 17), () => toast('Location access was not available.')) };
   map.on('click', event => { if (mode === 'select-center') { drrmCenterLocationReady = true; drrmPickedLocation = { latitude: event.latlng.lat, longitude: event.latlng.lng }; setMode('view'); L.popup().setLatLng(event.latlng).setContent('<b>Evacuation center location selected</b><br>Click + Add Center again to continue.').openOn(map); toast(`Center location selected: ${event.latlng.lat.toFixed(6)}, ${event.latlng.lng.toFixed(6)}`); return; } if (mode === 'select') { drrmPickedLocation = { latitude: event.latlng.lat, longitude: event.latlng.lng }; setMode('view'); L.popup().setLatLng(event.latlng).setContent('<b>Selected location</b><br>Click Add Household to use this point.').openOn(map); return; } });
   const nearestCenter = h => centers.reduce((best, c) => { const dist = drrmDistanceKm([Number(h.latitude), Number(h.longitude)], [Number(c.latitude), Number(c.longitude)]); return !best || dist < best.distance ? { center: c, distance: dist } : best; }, null); const colors = { Critical: '#dc2626', High: '#ea580c', Moderate: '#ca8a04', Low: '#16a34a' };
-  households.forEach(h => { const near = nearestCenter(h); const popup = `<b>${escapeHtml(h.household_number)}</b><br>Type: ${escapeHtml(h.location_type || 'House')}<br>${escapeHtml(h.address || '')}<br>Sitio/Purok: ${escapeHtml(h.sitio || h.purok || 'Not specified')}<br>Priority: ${escapeHtml(h.priority_level)}<hr>Residents: ${h.resident_count || 0}<br>Seniors: ${h.senior_count || 0} · PWD: ${h.pwd_count || 0}<br>Bedridden: ${h.bedridden_count || 0} · Pregnant: ${h.pregnant_count || 0}<br>Infants: ${h.infant_count || 0}<br>Medical/rescue notes: ${escapeHtml(h.notes || 'None')}${near ? `<br>Nearest center: ${escapeHtml(near.center.name)}<br>Distance: ${near.distance.toFixed(2)} km` : ''}<br><br>${button('Edit', 'edit-drrm-household', 'secondary-btn sm', `data-id="${h.id}"`)} ${button('Delete', 'delete-drrm-household', 'danger-btn sm', `data-id="${h.id}"`)}`; const marker = L.circleMarker([h.latitude, h.longitude], { radius: 8, color: colors[h.priority_level] || colors.Low, fillColor: colors[h.priority_level] || colors.Low, fillOpacity: .9 }).bindPopup(popup); marker.drrmData = h; marker.addTo(householdLayer); householdMarkers.push(marker); });
+  households.forEach(h => { const near = nearestCenter(h); const popup = `<b>${escapeHtml(h.household_number)}</b><br>${escapeHtml(h.address || '')}<br>Sitio/Purok: ${escapeHtml(h.sitio || h.purok || 'Not specified')}<br>Priority: ${escapeHtml(h.priority_level)}<hr>Residents: ${h.resident_count || 0}<br>Seniors: ${h.senior_count || 0} · PWD: ${h.pwd_count || 0}<br>Bedridden: ${h.bedridden_count || 0} · Pregnant: ${h.pregnant_count || 0}<br>Infants: ${h.infant_count || 0}<br>Medical/rescue notes: ${escapeHtml(h.notes || 'None')}${near ? `<br>Nearest center: ${escapeHtml(near.center.name)}<br>Distance: ${near.distance.toFixed(2)} km` : ''}<br><br>${button('Edit', 'edit-drrm-household', 'secondary-btn sm', `data-id="${h.id}"`)} ${button('Delete', 'delete-drrm-household', 'danger-btn sm', `data-id="${h.id}"`)}`; const marker = L.circleMarker([h.latitude, h.longitude], { radius: 8, color: colors[h.priority_level] || colors.Low, fillColor: colors[h.priority_level] || colors.Low, fillOpacity: .9 }).bindPopup(popup); marker.drrmData = h; marker.addTo(householdLayer); householdMarkers.push(marker); });
   centers.forEach(c => { const cap = Number(c.capacity || 0); const occ = Number(c.current_occupants || 0); const free = Math.max(0, cap - occ); const status = c.status || (free === 0 && cap ? 'Full' : 'Open'); L.marker([c.latitude, c.longitude]).bindPopup(`<b>${escapeHtml(c.name)}</b><br>${escapeHtml(c.address)}<br>Capacity: ${cap || 'Not set'}<br>Occupied: ${occ}<br>Available: ${cap ? free : 'Not set'}<br>Status: ${escapeHtml(status)}<br><br>${button('Edit', 'edit-drrm-center', 'secondary-btn sm', `data-id="${c.id}"`)} ${button('Delete', 'delete-drrm-center', 'danger-btn sm', `data-id="${c.id}"`)}`).addTo(centerLayer); });
   applyDrrmFilters();
 }
 
-function applyDrrmFilters() { const drrm = pageData.drrm || {}; const query = ($('#drrmSearch')?.value || '').toLowerCase(); const priority = $('#drrmPriority')?.value || ''; const locationType = $('#drrmLocationType')?.value || ''; $$('#pageContent tbody tr[data-drrm-row="household"]').forEach(row => { const item = (drrm.households || []).find(h => String(h.id) === row.dataset.id); const show = item && (!query || row.textContent.toLowerCase().includes(query)) && (!priority || item.priority_level === priority) && (!locationType || (item.location_type || 'House') === locationType); row.classList.toggle('hidden', !show); }); if (!window.drrmMapActions) return; window.drrmMapActions.householdMarkers.forEach(layer => { const item = layer.drrmData; const text = `${item.household_number} ${item.address || ''} ${item.sitio || item.purok || ''}`.toLowerCase(); const show = (!query || text.includes(query)) && (!priority || item.priority_level === priority) && (!locationType || (item.location_type || 'House') === locationType); if (show) window.drrmMapActions.householdLayer.addLayer(layer); else window.drrmMapActions.householdLayer.removeLayer(layer); }); }
+function applyDrrmFilters() { const drrm = pageData.drrm || {}; const query = ($('#drrmSearch')?.value || '').toLowerCase(); const priority = $('#drrmPriority')?.value || ''; $$('#pageContent tbody tr[data-drrm-row="household"]').forEach(row => { const item = (drrm.households || []).find(h => String(h.id) === row.dataset.id); const show = item && (!query || row.textContent.toLowerCase().includes(query)) && (!priority || item.priority_level === priority); row.classList.toggle('hidden', !show); }); if (!window.drrmMapActions) return; window.drrmMapActions.householdMarkers.forEach(layer => { const item = layer.drrmData; const text = `${item.household_number} ${item.address || ''} ${item.sitio || item.purok || ''}`.toLowerCase(); const show = (!query || text.includes(query)) && (!priority || item.priority_level === priority); if (show) window.drrmMapActions.householdLayer.addLayer(layer); else window.drrmMapActions.householdLayer.removeLayer(layer); }); }
 function residentsPage() {
   const residents = pageData.residents || [];
   const rows = residents.map(resident => `<tr><td>${resident.id}</td><td>${escapeHtml(resident.name)}</td><td>${escapeHtml(resident.email)}</td><td>${resident.is_active ? statusBadge("Active") : statusBadge("Inactive")}</td><td><div class="table-actions">${button(resident.is_active ? "Deactivate" : "Activate", "toggle-resident", "secondary-btn sm", `data-id="${resident.id}" data-active="${resident.is_active}"`)}${button("Delete", "delete-resident", "danger-btn sm", `data-id="${resident.id}"`)}</div></td></tr>`).join("");
@@ -483,7 +486,7 @@ function feedbackPage() {
     <td>${escapeHtml(new Date(item.created_at).toLocaleDateString())}</td><td>${statusBadge(item.status)}</td>
     <td>${button("View", "feedback-details", "secondary-btn sm", `data-id="${item.id}"`)}</td></tr>`).join("");
   return `${heading(admin ? "Complaints & Feedback" : "Complaints & Feedback", admin ? "Review resident concerns and update their handling status." : "Send a complaint, suggestion, or feedback to the Barangay Office.", admin ? "" : button("+ Send a Message", "new-feedback"))}
-    <section class="panel"><div class="table-wrap"><table><thead><tr><th>Type</th><th>Subject</th>${admin ? "<th>Resident</th>" : ""}<th>Date</th><th>Status</th><th>Details</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <section class="panel"><div class="table-wrap"><table><thead><tr><th>Subject</th>${admin ? "<th>Resident</th>" : ""}<th>Date</th><th>Status</th><th>Details</th></tr></thead><tbody>${rows}</tbody></table></div>
     ${feedback.length ? "" : emptyState("No messages yet", "Submitted complaints, suggestions, and feedback will appear here.")}</section>`;
 }
 
@@ -518,6 +521,8 @@ function reportsPage() {
     <div class="dashboard-columns"><section class="panel"><div class="panel-head"><h3>Requests by Status</h3></div><div class="report-status-list">${bars}</div></section>
     <section class="panel"><div class="panel-head"><h3>Requests by Service</h3></div><div class="table-wrap"><table><thead><tr><th>Service</th><th>Requests</th></tr></thead><tbody>${services || `<tr><td colspan="2">No request records.</td></tr>`}</tbody></table></div></section></div>`;
 }
+
+function auditLogsPage() { const data = pageData.auditLogs || { logs: { data: [] } }; const rows = (data.logs.data || []).map(log => `<tr><td>${escapeHtml(log.user?.name || "System")}</td><td>${escapeHtml(log.action)}</td><td>${escapeHtml(log.module)}</td><td>${escapeHtml(log.description || "")}</td><td>${escapeHtml(new Date(log.created_at).toLocaleString())}</td><td>${statusBadge(log.status)}</td></tr>`).join(""); return `${heading(mode === "admin" ? "Audit Logs" : "My Activity", mode === "admin" ? "Review system activity." : "Review your account activity.", mode === "admin" ? button("Print / Save PDF", "export-audit-pdf", "secondary-btn") : "")}<section class="panel"><form id="auditLogFilters" class="filters"><input type="date" name="from" value="${escapeHtml(pageData.auditFilters?.from || "")}"><input type="date" name="to" value="${escapeHtml(pageData.auditFilters?.to || "")}"><button type="submit" class="primary-btn sm">Apply Filter</button><button type="button" class="secondary-btn sm" data-action="clear-audit-filters">Clear</button></form><div class="table-wrap"><table><thead><tr><th>User</th><th>Action</th><th>Module</th><th>Description</th><th>Date/Time</th><th>Status</th></tr></thead><tbody>${rows || `<tr><td colspan="6">No audit records found.</td></tr>`}</tbody></table></div></section>`; }
 
 function settingsPage() {
   const admins = mode === "admin" ? (pageData.admins || []) : [];
@@ -579,6 +584,9 @@ async function loadPageData() {
     case "Reports":
       pageData.report = (await api("/api/admin/reports")).data;
       return;
+    case "Audit Logs":
+      pageData.auditLogs = (await api("/api/admin/audit-logs")).data;
+      return;
   }
 }
 
@@ -588,6 +596,7 @@ function renderContent() {
     case "My Profile": return profilePage();
     case "E-Services": return servicesPage();
     case "My Requests": return requestsPage(false);
+    case "My Activity": return auditLogsPage();
     case "Manage Requests": return requestsPage(true);
     case "DRRM Map": return drrmPage();
     case "Settings": return settingsPage();
@@ -597,6 +606,7 @@ function renderContent() {
     case "Complaints & Feedback": return feedbackPage();
     case "Notifications": return notificationsPage();
     case "Reports": return reportsPage();
+    case "Audit Logs": return auditLogsPage();
     case "Help": return helpPage();
     case "Settings": return settingsPage();
     default: return dashboard();
@@ -666,6 +676,7 @@ function openModal(title, subtitle, fields, submitText, onSubmit) {
 
   layer.innerHTML = `<form class="modal-card" id="activeModal"><h2>${escapeHtml(title)}</h2><p>${escapeHtml(subtitle)}</p><div class="form-grid">${fieldMarkup}</div><p class="auth-feedback" id="modalFeedback" role="alert"></p><div class="modal-actions"><button type="button" class="secondary-btn" data-action="close-modal">Cancel</button><button class="primary-btn sm" type="submit">${escapeHtml(submitText)}</button></div></form>`;
   layer.classList.remove("hidden");
+  document.querySelector("#appView .topbar")?.classList.add("hidden");
   $("#activeModal").addEventListener("submit", async event => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -683,10 +694,21 @@ function openModal(title, subtitle, fields, submitText, onSubmit) {
   });
 }
 
+function openImagePreview(url, alt = "Uploaded document") {
+  document.querySelector("#imagePreviewLayer")?.remove();
+  const layer = document.createElement("div");
+  layer.id = "imagePreviewLayer";
+  layer.className = "image-preview-layer";
+  layer.innerHTML = `<button type="button" class="image-preview-close" aria-label="Close image preview">×</button><img src="${url}" alt="${escapeHtml(alt)}">`;
+  layer.addEventListener("click", event => { if (event.target === layer || event.target.closest(".image-preview-close")) layer.remove(); });
+  document.body.appendChild(layer);
+}
+
 function openReadOnlyModal(title, content) {
   const layer = $("#modalLayer");
   layer.innerHTML = `<div class="modal-card"><h2>${escapeHtml(title)}</h2>${content}<div class="modal-actions"><button class="secondary-btn" data-action="close-modal">Close</button></div></div>`;
   layer.classList.remove("hidden");
+  document.querySelector("#appView .topbar")?.classList.add("hidden");
 }
 
 function serviceFields(service = {}) {
@@ -726,17 +748,40 @@ async function createRequest(serviceId = null) {
   });
 }
 
+function requestDocumentMarkup(request) {
+  const date = new Date().toLocaleDateString();
+  return `<div class="download-document"><div class="download-document-header"><div class="download-seal">BH</div><div><div class="download-eyebrow">BARANGAY HUMAYINGAN</div><h1>Official Service Request</h1><p>Approved barangay service document</p></div></div><div class="download-document-body"><div class="download-row"><span>Reference No.</span><b>${escapeHtml(request.reference_code)}</b></div><div class="download-row"><span>Resident</span><b>${escapeHtml(request.resident?.name || currentUser.name)}</b></div><div class="download-row"><span>Service</span><b>${escapeHtml(request.service?.name || "")}</b></div><div class="download-row"><span>Purpose</span><b>${escapeHtml(request.purpose || "")}</b></div><div class="download-row"><span>Approved date</span><b>${date}</b></div></div><div class="download-document-footer">This document was issued through the E-Barangay system.</div></div>`;
+}
+
+async function downloadRequestDocument(request, format) {
+  const markup = requestDocumentMarkup(request);
+  if (format === "png") {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="850"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="font-family:Arial;padding:70px;background:#fff;color:#15365f;height:100%;box-sizing:border-box">${markup}</div></foreignObject></svg>`;
+    const image = new Image();
+    image.onload = () => { const canvas = document.createElement("canvas"); canvas.width = 1200; canvas.height = 850; canvas.getContext("2d").drawImage(image, 0, 0); const link = document.createElement("a"); link.download = `${request.reference_code}.png`; link.href = canvas.toDataURL("image/png"); link.click(); };
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    return;
+  }
+  const printWindow = window.open("", "barangayPdfPreview", "width=900,height=700");
+  if (!printWindow) throw new Error("Please allow pop-ups to save the PDF.");
+  printWindow.document.write(`<html><head><title>${escapeHtml(request.reference_code)}</title><style>body{margin:0;background:#eef5fb;font-family:Arial;color:#15365f}.download-document{width:760px;margin:40px auto;padding:42px;background:#fff;border:1px solid #c9dcec;box-shadow:0 10px 30px #17365f20}.download-document-header{display:flex;gap:18px;align-items:center;border-bottom:3px solid #1674ed;padding-bottom:22px}.download-seal{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;background:#1674ed;color:#fff;font-weight:800;font-size:22px}.download-eyebrow{font-size:12px;letter-spacing:2px;font-weight:800;color:#1674ed}.download-document h1{margin:5px 0;font-size:28px}.download-document p{margin:0;color:#6f88a8}.download-document-body{margin:32px 0}.download-row{display:flex;gap:20px;padding:15px 0;border-bottom:1px solid #dce8f2}.download-row span{width:150px;color:#6f88a8}.download-row b{flex:1}.download-document-footer{margin-top:45px;padding-top:18px;border-top:1px solid #dce8f2;color:#6f88a8;font-size:12px}@page{size:A4;margin:14mm}@media print{body{background:#fff}.download-document{margin:0;border:0;box-shadow:none;width:auto}}</style></head><body>${markup}</body></html>`);
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => printWindow.print(), 300);
+}
+
 async function viewRequest(id) {
   const request = pageData.requests.find(item => String(item.id) === String(id));
   if (!request) throw new Error("The selected request could not be found.");
   const history = (request.status_history || []).map(item => `<li><b>${escapeHtml(item.to_status)}</b> · ${escapeHtml(new Date(item.created_at).toLocaleString())}<br><small>${escapeHtml(item.changed_by?.name || "Resident")}${item.note ? ` — ${escapeHtml(item.note)}` : ""}</small></li>`).join("");
-  const files = (request.files || []).map(file => `<li><a href="/api/request-files/${file.id}" target="_blank" rel="noopener">${escapeHtml(file.original_name)}</a> (${Math.ceil(file.size / 1024)} KB)</li>`).join("");
+  const files = (request.files || []).map(file => { const url = file.preview_url || new URL(`api/request-files/${file.id}`, document.baseURI).href; const isImage = /^image\/(jpeg|png|jpg|gif|webp)$/i.test(file.mime_type || ""); return `<li class="request-file"><a href="${url}" class="request-file-link">${isImage ? `<img class="request-file-preview" src="${url}" alt="${escapeHtml(file.original_name)}" loading="lazy">` : `<span class="request-file-icon">DOC</span>`}<span class="request-file-name">${escapeHtml(file.original_name)} <small>(${Math.ceil(file.size / 1024)} KB)</small></span></a></li>`; }).join("");
+  const downloadControls = mode !== "admin" && request.status === "Approved" ? `<div class="request-download-actions"><b>Download approved document</b><div>${button("PDF", "download-request", "secondary-btn sm", `data-id="${request.id}" data-format="pdf"`)}${button("PNG", "download-request", "secondary-btn sm", `data-id="${request.id}" data-format="png"`)}</div></div>` : "";
   const adminControls = mode === "admin" ? `<form id="requestStatusForm" class="form-grid" data-id="${request.id}">
     <div class="form-field"><label>Update status</label><select class="form-control" name="status" required>${requestStatuses.map(status => `<option ${status === request.status ? "selected" : ""}>${status}</option>`).join("")}</select></div>
     <div class="form-field full-width"><label>Staff note</label><textarea class="form-control" name="admin_note" maxlength="2000">${escapeHtml(request.admin_note || "")}</textarea></div>
     <div class="form-field full-width"><button class="primary-btn sm" type="submit">Save status</button></div><p class="auth-feedback" id="requestStatusFeedback" role="alert"></p>
   </form>` : request.admin_note ? `<p><b>Barangay note:</b> ${escapeHtml(request.admin_note)}</p>` : "";
-  openReadOnlyModal(request.reference_code, `<p><b>Service:</b> ${escapeHtml(request.service?.name || "")}</p><p><b>Status:</b> ${statusBadge(request.status)}</p><p><b>Purpose:</b><br>${escapeHtml(request.purpose)}</p><h3>Submitted documents</h3><ul>${files || "<li>No files attached</li>"}</ul><h3>Status history</h3><ol>${history || "<li>No status history</li>"}</ol>${adminControls}`);
+  openReadOnlyModal(request.reference_code, `<p><b>Service:</b> ${escapeHtml(request.service?.name || "")}</p><p><b>Status:</b> ${statusBadge(request.status)}</p><p><b>Purpose:</b><br>${escapeHtml(request.purpose)}</p><h3>Submitted documents</h3><ul>${files || "<li>No files attached</li>"}</ul><h3>Status history</h3><ol>${history || "<li>No status history</li>"}</ol>${downloadControls}${adminControls}`);
 }
 
 async function createFeedback() {
@@ -798,43 +843,40 @@ async function action(name, element) {
       break;
     case "edit-drrm-household": { const h = (pageData.drrm.households || []).find(item => String(item.id) === element.dataset.id); if (!h) return; openModal('Edit Household', 'Update location and vulnerability counts.', [{ name: 'address', label: 'Address', required: true, value: h.address }, { name: 'sitio', label: 'Sitio', value: h.sitio || h.purok || '' }, { name: 'landmark', label: 'Landmark', value: h.landmark || '' }, { name: 'latitude', label: 'Latitude', type: 'number', required: true, value: h.latitude }, { name: 'longitude', label: 'Longitude', type: 'number', required: true, value: h.longitude }, { name: 'resident_count', label: 'Residents', type: 'number', required: true, value: h.resident_count || 0 }, { name: 'senior_count', label: 'Seniors', type: 'number', value: h.senior_count || 0 }, { name: 'pwd_count', label: 'PWD', type: 'number', value: h.pwd_count || 0 }, { name: 'bedridden_count', label: 'Bedridden', type: 'number', value: h.bedridden_count || 0 }, { name: 'pregnant_count', label: 'Pregnant', type: 'number', value: h.pregnant_count || 0 }, { name: 'infant_count', label: 'Infants', type: 'number', value: h.infant_count || 0 }, { name: 'notes', label: 'Medical/rescue notes', type: 'textarea', full: true, value: h.notes || '' }], 'Save changes', async formData => { await api(`/api/admin/drrm/households/${h.id}`, { method: 'PATCH', body: JSON.stringify(Object.fromEntries(formData)) }); toast('Household updated.'); await render(); }); break; }
     case "edit-drrm-center": { const c = (pageData.drrm.evacuation_centers || []).find(item => String(item.id) === element.dataset.id); if (!c) return; openModal('Edit Evacuation Center', 'Update capacity and operating status.', [{ name: 'name', label: 'Center name', required: true, value: c.name }, { name: 'address', label: 'Address', required: true, value: c.address }, { name: 'latitude', label: 'Latitude', type: 'number', required: true, value: c.latitude }, { name: 'longitude', label: 'Longitude', type: 'number', required: true, value: c.longitude }, { name: 'capacity', label: 'Capacity', type: 'number', value: c.capacity || 0 }, { name: 'current_occupants', label: 'Current occupants', type: 'number', value: c.current_occupants || 0 }, { name: 'status', label: 'Status', type: 'select', value: c.status || 'Open', options: [{ value: 'Open', label: 'Open' }, { value: 'Full', label: 'Full' }, { value: 'Temporarily Closed', label: 'Temporarily Closed' }] }], 'Save changes', async formData => { await api(`/api/admin/drrm/evacuation-centers/${c.id}`, { method: 'PATCH', body: JSON.stringify(Object.fromEntries(formData)) }); toast('Evacuation center updated.'); await render(); }); break; }
-    case "delete-drrm-household": { if (!confirm('Permanently delete this household? This cannot be undone.')) return; await api(`/api/admin/drrm/households/${element.dataset.id}`, { method: 'DELETE' }); toast('Household deleted.'); await render(); break; } case "delete-drrm-center": { if (!confirm('Permanently delete this evacuation center? This cannot be undone.')) return; await api(`/api/admin/drrm/evacuation-centers/${element.dataset.id}`, { method: 'DELETE' }); toast('Evacuation center deleted.'); await render(); break; }    case "new-household":
-      openModal("Add DRRM Household", "Add a household location and its highest-priority vulnerability information.", [
-        { name: "household_number", label: "Reference number", placeholder: "HH-001", required: true },
-        { name: "location_type", label: "Location type", type: "select", options: [{ value: "House", label: "House" }, { value: "Evacuation Center", label: "Evacuation Center" }, { value: "School", label: "School" }, { value: "Covered Court", label: "Covered Court" }] },
-{ name: "address", label: "House / landmark address", placeholder: "e.g. near Humayingan Elementary School", help: "Required: use a house number, street, or nearby landmark.", required: true, full: true },
-        { name: "sitio", label: "Sitio" },
-        { name: "latitude", label: "Latitude", type: "number", value: drrmPickedLocation?.latitude?.toFixed(6) || "13.9965", required: true },
-        { name: "longitude", label: "Longitude", type: "number", value: drrmPickedLocation?.longitude?.toFixed(6) || "120.6732", required: true },
-        { name: "resident_count", label: "Total people in household", type: "number", value: "1", required: true },
-        { name: "senior_count", label: "Senior citizens", type: "number", value: "0" },
-        { name: "pwd_count", label: "PWDs", type: "number", value: "0" },
-        { name: "bedridden_count", label: "Bedridden residents", type: "number", value: "0" },
-        { name: "pregnant_count", label: "Pregnant residents", type: "number", value: "0" },
-        { name: "infant_count", label: "Infants", type: "number", value: "0" },
-        { name: "transport_assistance_count", label: "Needs transport assistance", type: "number", value: "0" },
-        { name: "medical_needs", label: "Medical/rescue notes", type: "textarea", full: true }
-      ], "Save household", async formData => {
-        const data = Object.fromEntries(formData);
-        const counts = data.location_type === "House" ? { resident_count: Number(data.resident_count || 0), senior_count: Number(data.senior_count || 0), pwd_count: Number(data.pwd_count || 0), bedridden_count: Number(data.bedridden_count || 0), pregnant_count: Number(data.pregnant_count || 0), infant_count: Number(data.infant_count || 0), transport_assistance_count: Number(data.transport_assistance_count || 0) } : { resident_count: 0, senior_count: 0, pwd_count: 0, bedridden_count: 0, pregnant_count: 0, infant_count: 0, transport_assistance_count: 0 };
-        const payload = { household_number: data.household_number, location_type: data.location_type, address: data.address, sitio: data.sitio, latitude: Number(data.latitude), longitude: Number(data.longitude), ...counts, members: [] };
-        await api("/api/admin/drrm/households", { method: "POST", body: JSON.stringify(payload) });
-        toast("DRRM household added.");
-        await render();
-      });
-      $("#activeModal [name=location_type]").addEventListener("change", event => {
-        const isHouse = event.target.value === "House";
-        ["resident_count", "senior_count", "pwd_count", "bedridden_count", "pregnant_count", "infant_count", "transport_assistance_count", "medical_needs"].forEach(name => {
-          const field = $("#activeModal [data-field-name=" + name + "]");
-          if (field) field.classList.toggle("hidden", !isHouse);
-        });
-      });
+function openDrrmHouseholdModal() {
+  const layer = $("#modalLayer");
+  const reference = `HH-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  layer.innerHTML = `<form class="modal-card drrm-household-modal" id="drrmHouseholdForm">
+    <div class="drrm-form-header"><div><span class="eyebrow">DRRM HOUSEHOLD RECORD</span><h2>Add Household</h2><p>Record location details and the household's priority vulnerabilities.</p></div><span class="drrm-step-count" data-step-count>Step 1 of 2</span></div>
+    <div class="drrm-stepper"><span class="active" data-step-indicator="1">1. Location details</span><span data-step-indicator="2">2. Vulnerability and household details</span></div>
+    <section class="drrm-form-step active" data-step="1"><div class="form-grid">
+      <div class="form-field full-width"><label>Reference number</label><input class="form-control" name="household_number" value="${reference}" readonly><small>Automatically generated by the system.</small></div>
+      <div class="form-field full-width"><label>House Number / Address / Landmark <b>*</b></label><input class="form-control" name="address" placeholder="e.g. 9999 or near Humayingan Elementary School" required><small class="field-error" data-error="address"></small></div>
+      <div class="form-field"><label>Sitio / Purok</label><input class="form-control" name="sitio" placeholder="e.g. Sitio 1"></div>
+      <div class="form-field coordinate-field"><label>Latitude (°) <b>*</b></label><input class="form-control" name="latitude" type="number" step="any" min="-90" max="90" value="13.9965" required><small class="field-error" data-error="latitude"></small></div>
+      <div class="form-field coordinate-field"><label>Longitude (°) <b>*</b></label><input class="form-control" name="longitude" type="number" step="any" min="-180" max="180" value="120.6732" required><small class="field-error" data-error="longitude"></small></div>
+      <div class="form-field full-width"><button type="button" class="secondary-btn location-button" data-use-location>Use my current location</button><small>Allow browser location access to fill the coordinates automatically.</small></div>
+    </div></section>
+    <section class="drrm-form-step" data-step="2"><div class="form-grid"><div class="form-field full-width"><label>Number of household members <b>*</b></label><input class="form-control" name="resident_count" type="number" min="0" value="1" required><small class="field-error" data-error="resident_count"></small></div></div><div class="vulnerability-card"><h3>Vulnerability information</h3><p>Enter the number of household members in each category.</p><div class="form-grid"><div class="form-field"><label>Senior citizens</label><input class="form-control" name="senior_count" type="number" min="0" value="0"></div><div class="form-field"><label>Persons with Disabilities (PWD)</label><input class="form-control" name="pwd_count" type="number" min="0" value="0"></div><div class="form-field"><label>Bedridden residents</label><input class="form-control" name="bedridden_count" type="number" min="0" value="0"></div><div class="form-field"><label>Pregnant residents</label><input class="form-control" name="pregnant_count" type="number" min="0" value="0"></div><div class="form-field"><label>Infants</label><input class="form-control" name="infant_count" type="number" min="0" value="0"></div><div class="form-field"><label>Needs transportation assistance</label><input class="form-control" name="transport_assistance_count" type="number" min="0" value="0"></div></div></div><div class="form-field full-width"><label>Medical / rescue notes</label><textarea class="form-control" name="notes" placeholder="e.g. bedridden resident, oxygen needs, emergency contact, access restrictions"></textarea></div></section>
+    <p class="auth-feedback" id="drrmHouseholdFeedback" role="alert"></p><div class="modal-actions drrm-sticky-actions"><button type="button" class="secondary-btn" data-action="close-modal">Cancel</button><button type="button" class="secondary-btn" data-step-back hidden>Back</button><button type="button" class="primary-btn sm" data-step-next>Next</button><button type="submit" class="primary-btn sm" data-step-save hidden>Save Household</button></div>
+  </form>`;
+  layer.classList.remove("hidden"); document.querySelector("#appView .topbar")?.classList.add("hidden");
+  const form = $("#drrmHouseholdForm"); let step = 1; const steps = $$('[data-step]', form); const renderStep = () => { steps.forEach(item => item.classList.toggle("active", Number(item.dataset.step) === step)); $$('[data-step-indicator]', form).forEach(item => item.classList.toggle("active", Number(item.dataset.stepIndicator) === step)); $("[data-step-count]", form).textContent = `Step ${step} of 2`; $("[data-step-back]", form).hidden = step === 1; $("[data-step-next]", form).hidden = step === 2; $("[data-step-save]", form).hidden = step !== 2; };
+  const validate = () => { let valid = true; $$('[data-error]', form).forEach(error => error.textContent = ""); const fields = step === 1 ? ["address", "latitude", "longitude"] : ["resident_count"]; fields.forEach(name => { const field = form.elements[name]; if (!field.checkValidity()) { valid = false; const error = form.querySelector(`[data-error="${name}"]`); if (error) error.textContent = field.validity.valueMissing ? "This field is required." : "Enter a valid value."; } }); return valid; };
+  $("[data-step-next]", form).addEventListener("click", () => { if (validate()) { step = 2; renderStep(); } }); $("[data-step-back]", form).addEventListener("click", () => { step = 1; renderStep(); });
+  $("[data-use-location]", form).addEventListener("click", event => { if (!navigator.geolocation) { $("#drrmHouseholdFeedback").textContent = "Location access is not supported by this browser."; return; } event.currentTarget.disabled = true; navigator.geolocation.getCurrentPosition(position => { form.elements.latitude.value = position.coords.latitude.toFixed(6); form.elements.longitude.value = position.coords.longitude.toFixed(6); event.currentTarget.disabled = false; }, () => { $("#drrmHouseholdFeedback").textContent = "Unable to get your location. Please allow location access or enter the coordinates manually."; event.currentTarget.disabled = false; }); });
+  form.addEventListener("submit", async event => { event.preventDefault(); if (!validate()) return; const data = Object.fromEntries(new FormData(form)); const payload = { household_number: data.household_number, address: data.address, sitio: data.sitio, latitude: Number(data.latitude), longitude: Number(data.longitude), resident_count: Number(data.resident_count), senior_count: Number(data.senior_count || 0), pwd_count: Number(data.pwd_count || 0), bedridden_count: Number(data.bedridden_count || 0), pregnant_count: Number(data.pregnant_count || 0), infant_count: Number(data.infant_count || 0), transport_assistance_count: Number(data.transport_assistance_count || 0), notes: data.notes || "", members: [] }; const button = $("[data-step-save]", form); button.disabled = true; try { await api("/api/admin/drrm/households", { method: "POST", body: JSON.stringify(payload) }); layer.classList.add("hidden"); toast("DRRM household added."); await render(); } catch (error) { $("#drrmHouseholdFeedback").textContent = error.message || "Unable to save household."; } finally { button.disabled = false; } }); renderStep();
+}
+    case "new-household": openDrrmHouseholdModal(); break;
       break;    case "new-request":
       await createRequest();
       break;
     case "request-service":
       await createRequest(element.dataset.id);
       break;
+    case "toggle-service-menu": { const menu = element.closest(".service-actions-menu")?.querySelector(".service-actions-options"); document.querySelectorAll(".service-actions-options").forEach(item => { if (item !== menu) item.classList.add("hidden"); }); menu?.classList.toggle("hidden"); break; }
+    case "toggle-download-menu": { const menu = element.closest(".download-menu")?.querySelector(".download-menu-options"); document.querySelectorAll(".download-menu-options").forEach(item => { if (item !== menu) item.classList.add("hidden"); }); menu?.classList.toggle("hidden"); break; }
+    case "download-request": { const request = pageData.requests.find(item => String(item.id) === String(element.dataset.id)); if (!request || request.status !== "Approved") return; const format = element.closest(".request-download-cell")?.querySelector(".download-format")?.value || element.dataset.format || "pdf"; await downloadRequestDocument(request, format); break; }
     case "request-details":
       await viewRequest(element.dataset.id);
       break;
@@ -851,6 +893,56 @@ async function action(name, element) {
         await render();
       });
       break;
+function defaultTemplateLayout() {
+  return [
+    { type: "logo", x: 8, y: 7 },
+    { type: "lian_logo", x: 82, y: 7 },
+    { type: "text", text: "BARANGAY HUMAYINGAN", x: 28, y: 8 },
+    { type: "text", text: "OFFICIAL DOCUMENT", x: 28, y: 15 },
+    { type: "resident_name", x: 10, y: 32 },
+    { type: "service_name", x: 10, y: 42 },
+    { type: "reference_code", x: 10, y: 52 },
+    { type: "approved_date", x: 10, y: 62 },
+    { type: "purpose", x: 10, y: 72 },
+    { type: "signature", x: 63, y: 82 }
+  ];
+}
+
+function templateBlockLabel(block) {
+  return ({ logo: "Barangay Logo", lian_logo: "Lian Logo", text: block.text || "Text", resident_name: "Resident name", service_name: "Service name", reference_code: "Reference number", approved_date: "Approved date", purpose: "Purpose", signature: "Signature", qr: "QR verification" })[block.type] || block.type;
+}
+
+function templateBlockPreview(block, service) {
+  const samples = { resident_name: "Juan Dela Cruz", service_name: service.name, reference_code: "BRG-20261110-MI97G4SU", approved_date: "November 10, 2026", purpose: "For official transaction", signature: "Punong Barangay" };
+  if (block.type === "logo") return `<img src="/images/barangay-seal.png" alt="Barangay seal">`;
+  if (block.type === "lian_logo") return `<img src="/images/Lian-logo.jpg" alt="Lian logo">`;
+  if (block.type === "text") return block.text || "Sample text";
+  if (block.type === "purpose") return "Purpose: For official transaction";
+  return samples[block.type] || templateBlockLabel(block);
+}
+
+function openTemplateEditor(service) {
+  const layer = $("#modalLayer");
+  let layout = JSON.parse(JSON.stringify(service.template_layout || defaultTemplateLayout()));
+  const color = service.template_primary_color || "#1674ed";
+  layer.innerHTML = `<div class="template-editor-card"><div class="template-editor-head"><div><h2>Edit Template</h2><p>${escapeHtml(service.name)} · drag blocks into the document canvas</p></div><button type="button" class="secondary-btn" data-template-close>Close</button></div><div class="template-editor-toolbar"><input class="form-control" name="template_title" value="${escapeHtml(service.template_title || `${service.name} Certificate`)}" placeholder="Document title"><input class="form-control" name="template_primary_color" type="color" value="${color}"><div class="template-palette"><button type="button" draggable="true" data-add-block="text">+ Text</button><button type="button" draggable="true" data-add-block="resident_name">+ Resident</button><button type="button" draggable="true" data-add-block="service_name">+ Service</button><button type="button" draggable="true" data-add-block="signature">+ Signature</button><button type="button" draggable="true" data-add-block="qr">+ QR</button><button type="button" draggable="true" data-add-block="lian_logo">+ Lian Logo</button></div></div><div class="template-editor-workspace"><div class="template-palette-help">Drag or click a block to add it. Double-click text blocks to edit.</div><div class="template-canvas" style="--template-color:${color}"></div></div><div class="template-editor-actions"><button type="button" class="secondary-btn" data-template-close>Cancel</button><button type="button" class="primary-btn sm" data-template-save>Save Template</button></div></div>`;
+  layer.classList.remove("hidden");
+  document.querySelector("#appView .topbar")?.classList.add("hidden");
+  const canvas = layer.querySelector(".template-canvas");
+  const render = () => { canvas.innerHTML = layout.map((block, index) => `<div class="template-block template-block-${block.type}" draggable="true" data-index="${index}" style="left:${block.x ?? 10}%;top:${block.y ?? 10}%">${templateBlockPreview(block, service)}</div>`).join(""); };
+  const close = () => { layer.classList.add("hidden"); document.querySelector("#appView .topbar")?.classList.remove("hidden"); };
+  layer.querySelectorAll("[data-template-close]").forEach(button => button.addEventListener("click", close));
+  layer.querySelectorAll("[data-add-block]").forEach(button => button.addEventListener("click", () => { layout.push({ type: button.dataset.addBlock, x: 10, y: 25 + layout.length * 6, text: button.dataset.addBlock === "text" ? "New text" : undefined }); render(); }));
+  canvas.addEventListener("dblclick", event => { const block = event.target.closest(".template-block"); if (!block) return; const item = layout[Number(block.dataset.index)]; if (item.type === "text") { const text = prompt("Edit text", item.text || ""); if (text !== null) { item.text = text; render(); } } });
+  canvas.addEventListener("dragstart", event => { const block = event.target.closest(".template-block"); if (block) event.dataTransfer.setData("text/plain", block.dataset.index); });
+  layer.querySelectorAll("[data-add-block]").forEach(button => button.addEventListener("dragstart", event => event.dataTransfer.setData("text/plain", "new:" + button.dataset.addBlock)));
+  canvas.addEventListener("dragover", event => event.preventDefault());
+  canvas.addEventListener("drop", event => { event.preventDefault(); const payload = event.dataTransfer.getData("text/plain"); const rect = canvas.getBoundingClientRect(); const x = Math.max(0, Math.min(90, ((event.clientX - rect.left) / rect.width) * 100)); const y = Math.max(0, Math.min(92, ((event.clientY - rect.top) / rect.height) * 100)); if (payload.startsWith("new:")) { const type = payload.slice(4); layout.push({ type, x, y, text: type === "text" ? "New text" : undefined }); } else { const index = Number(payload); if (layout[index]) { layout[index].x = x; layout[index].y = y; } } render(); });
+  layer.querySelector("[data-template-save]").addEventListener("click", async () => { const payload = { template_title: layer.querySelector("[name=template_title]").value, template_body: service.template_body || "This certifies that {{resident_name}} requested {{service_name}} under reference {{reference_code}}.", template_footer: service.template_footer || "Issued through the E-Barangay system.", template_signature_name: service.template_signature_name || "", template_signature_position: service.template_signature_position || "Punong Barangay", template_primary_color: layer.querySelector("[name=template_primary_color]").value, template_layout: layout }; try { const { data } = await api(`/api/services/${service.id}/template`, { method: "PATCH", body: JSON.stringify(payload) }); const index = pageData.services.findIndex(item => String(item.id) === String(service.id)); if (index >= 0) pageData.services[index] = data.service; close(); toast("Document template saved."); await render(); } catch (error) { toast(error.message || "Unable to save template."); } });
+  render();
+}
+
+    case "edit-template": { const service = pageData.services.find(item => String(item.id) === element.dataset.id); if (service) openTemplateEditor(service); break; }
     case "edit-service": {
       const service = pageData.services.find(item => String(item.id) === element.dataset.id);
       openModal("Edit Barangay Service", "Update the official service information.", serviceFields(service), "Save changes", async formData => {
@@ -937,7 +1029,19 @@ async function action(name, element) {
       toast("Resident account deleted.");
       await render();
       break;
-    }    case "export-csv":
+    }
+    case "clear-audit-filters":
+      pageData.auditFilters = {};
+      pageData.auditLogs = (await api("/api/admin/audit-logs")).data;
+      $("#pageContent").innerHTML = auditLogsPage();
+      break;
+    case "export-audit-pdf": {
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) { toast("Please allow pop-ups to save the PDF."); break; }
+      printWindow.document.write(`<html><head><title>Audit Logs</title><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;text-align:left;font-size:12px}</style></head><body><h1>Barangay System Audit Logs</h1>${$("#pageContent .table-wrap")?.innerHTML || ""}</body></html>`);
+      printWindow.document.close(); printWindow.print(); break;
+    }
+    case "export-csv":
       await exportRequests();
       break;
     case "mark-notification-read":
@@ -1000,6 +1104,7 @@ async function action(name, element) {
       break;
     case "close-modal":
       $("#modalLayer").classList.add("hidden");
+      document.querySelector("#appView .topbar")?.classList.remove("hidden");
       break;
   }
 }
@@ -1121,6 +1226,14 @@ $("#navMenu").addEventListener("click", event => {
   if (link) go(link.dataset.page);
 });
 document.addEventListener("click", event => {
+  const fileLink = event.target.closest(".request-file-link");
+  if (fileLink && fileLink.querySelector("img")) {
+    event.preventDefault();
+    const image = fileLink.querySelector("img");
+    openImagePreview(image.src, image.alt);
+    return;
+  }
+
   const pageLink = event.target.closest("[data-page]");
   if (pageLink) {
     event.preventDefault();
@@ -1177,13 +1290,28 @@ $("#pageContent").addEventListener("input", event => {
       row.classList.toggle("hidden", !visible);
     });
   }
-  if (["drrmSearch", "drrmPriority", "drrmLocationType"].includes(event.target.id)) applyDrrmFilters();
+  if (["drrmSearch", "drrmPriority"].includes(event.target.id)) applyDrrmFilters();
   if (event.target.id === "residentSearch") {
     const query = event.target.value.toLowerCase();
     $$("#pageContent tbody tr").forEach(row => row.classList.toggle("hidden", !row.textContent.toLowerCase().includes(query)));
   }
 });
-$("#modalLayer").addEventListener("submit", async event => {
+$("#pageContent").addEventListener("submit", async event => {
+  const form = event.target;
+  if (form.id !== "auditLogFilters") return;
+  event.preventDefault();
+  const submit = form.querySelector("button[type=submit]");
+  submit.disabled = true;
+  try {
+    pageData.auditFilters = Object.fromEntries(new FormData(form));
+    pageData.auditLogs = (await api("/api/admin/audit-logs?" + new URLSearchParams(pageData.auditFilters))).data;
+    $("#pageContent").innerHTML = auditLogsPage();
+  } catch (error) {
+    toast(error.message || "Unable to filter audit logs.");
+  } finally {
+    $("#pageContent button[type=submit]")?.removeAttribute("disabled");
+  }
+});$("#modalLayer").addEventListener("submit", async event => {
   if (event.target.id === "requestStatusForm") {
     event.preventDefault();
     const form = event.target;
@@ -1198,6 +1326,7 @@ $("#modalLayer").addEventListener("submit", async event => {
       });
       toast(data.message);
       $("#modalLayer").classList.add("hidden");
+      document.querySelector("#appView .topbar")?.classList.remove("hidden");
       await render();
     } catch (error) {
       feedback.textContent = error.message;
@@ -1217,6 +1346,7 @@ $("#modalLayer").addEventListener("submit", async event => {
       });
       toast("Message status updated.");
       $("#modalLayer").classList.add("hidden");
+      document.querySelector("#appView .topbar")?.classList.remove("hidden");
       await render();
     } catch (error) {
       $("#feedbackStatusFeedback").textContent = error.message;

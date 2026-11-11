@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminResidentController;
 use App\Http\Controllers\AnnouncementController;
+use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\DrrmController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BarangayServiceController;
@@ -31,7 +32,7 @@ Route::get('/auth/session', [AuthController::class, 'session'])
     ->middleware(EnsureActiveAccount::class)
     ->name('auth.session');
 Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
-Route::middleware(['auth', EnsureActiveAccount::class])->group(function () {
+Route::middleware(['auth', EnsureActiveAccount::class, 'admin.audit'])->group(function () {
     Route::patch('/api/profile', [AuthController::class, 'updateProfile']);
     Route::post('/api/profile/password', [AuthController::class, 'changePassword']);
 });
@@ -39,7 +40,7 @@ Route::middleware(['auth', EnsureActiveAccount::class])
     ->get('/admin/residents', [AuthController::class, 'residents'])
     ->name('admin.residents');
 
-Route::middleware(['auth', EnsureActiveAccount::class])->group(function () {
+Route::middleware(['auth', EnsureActiveAccount::class, 'admin.audit'])->group(function () {
     Route::get('/api/residents', [AdminResidentController::class, 'index']);
     Route::post('/api/residents', [AdminResidentController::class, 'store']);
     Route::patch('/api/residents/{user}', [AdminResidentController::class, 'update']);
@@ -58,6 +59,7 @@ Route::middleware(['auth', EnsureActiveAccount::class])->group(function () {
     Route::post('/api/services', [BarangayServiceController::class, 'store']);
     Route::put('/api/services/{service}', [BarangayServiceController::class, 'update']);
     Route::patch('/api/services/{service}/status', [BarangayServiceController::class, 'toggleStatus']);
+    Route::patch('/api/services/{service}/template', [BarangayServiceController::class, 'updateTemplate']);
     Route::delete('/api/services/{service}', [BarangayServiceController::class, 'destroy']);
 
     Route::get('/api/requests', [ServiceRequestController::class, 'index']);
@@ -75,6 +77,7 @@ Route::middleware(['auth', EnsureActiveAccount::class])->group(function () {
 
     Route::get('/api/admin/reports', [ReportController::class, 'index']);
     Route::get('/api/admin/reports/requests.csv', [ReportController::class, 'exportRequests']);
+    Route::get('/api/admin/audit-logs', [AuditLogController::class, 'index']);
 
     Route::get('/api/admin/drrm', [DrrmController::class, 'index']);
     Route::post('/api/admin/drrm/households', [DrrmController::class, 'storeHousehold']);
