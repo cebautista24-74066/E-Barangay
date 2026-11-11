@@ -89,6 +89,12 @@ class ResidentAuthenticationTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_resident_can_log_in_with_whitespace_around_email(): void
+    {
+        User::factory()->create(['email' => 'resident@example.com', 'password' => 'secure-pass-123', 'role' => 'Resident']);
+        $this->postJson('/auth/login', ['email' => '  RESIDENT@EXAMPLE.COM  ', 'password' => 'secure-pass-123'])->assertOk()->assertJsonPath('user.email', 'resident@example.com');
+    }
+
     public function test_only_administrators_can_view_resident_database_ids(): void
     {
         $resident = User::factory()->create([

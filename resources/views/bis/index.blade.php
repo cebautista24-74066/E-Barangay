@@ -17,7 +17,7 @@
   <main id="landingView" class="public-landing">
     <header class="public-nav">
       <a class="public-brand" href="#home" aria-label="E-Barangay home">
-        <span class="public-brand-mark">E</span>
+        <span class="public-brand-mark"><img src="/images/barangay-seal.png" alt="Barangay Humayingan seal"></span>
         <span><strong>E-Barangay</strong><small>Humayingan</small></span>
       </a>
       <nav class="public-nav-links" aria-label="Main navigation">
@@ -121,7 +121,7 @@
     </section>
 
     <footer class="public-footer">
-      <a class="public-brand" href="#home"><span class="public-brand-mark">E</span><span><strong>E-Barangay Humayingan</strong><small>Digital Governance and Public Service Portal</small></span></a>
+      <a class="public-brand" href="#home"><span class="public-brand-mark"><img src="/images/barangay-seal.png" alt="Barangay Humayingan seal"></span><span><strong>E-Barangay Humayingan</strong><small>Digital Governance and Public Service Portal</small></span></a>
       <span>© <span id="landingYear"></span> Barangay Humayingan · Resident services and request information</span>
     </footer>
   </main>

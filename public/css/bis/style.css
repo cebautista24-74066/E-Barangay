@@ -6793,6 +6793,20 @@ body.dark-mode #appView .profile-menu button:hover {
         font-size: 12px;
     }
 }
+/* Keep the workspace rail present outside the compact mobile navigation. */
+@media (min-width: 761px) {
+    #appView.app-shell {
+        display: grid;
+        grid-template-columns: 255px minmax(0, 1fr);
+        align-items: start;
+    }
+
+    #appView > .sidebar {
+        display: flex;
+        visibility: visible;
+        transform: none;
+    }
+}
 /* Registration form spacing refinements */
 #registerForm .primary-btn {
     margin-top: 16px;
@@ -7592,3 +7606,34 @@ body.dark-mode #modalLayer .drrm-household-modal { border-color: #3a5872; }
 #modalLayer .drrm-household-modal .vulnerability-card p { margin: 0 0 14px; color: #b5cbe0; }
 #modalLayer .drrm-household-modal .drrm-form-step > .form-field.full-width { margin-top: 4px; }
 #modalLayer .drrm-household-modal .drrm-form-step > .form-field.full-width textarea { min-height: 88px; }
+/* Complaints & Feedback table */
+#appView .feedback-panel { padding: 24px 26px 26px; }
+#appView .feedback-table { min-width: 700px; table-layout: fixed; }
+#appView .feedback-table th,
+#appView .feedback-table td { padding: 18px 16px; }
+#appView .feedback-table th:nth-child(1),
+#appView .feedback-table td:nth-child(1) { width: 36%; }
+#appView .feedback-table th:nth-child(2),
+#appView .feedback-table td:nth-child(2) { width: 18%; }
+#appView .feedback-table th:nth-child(3),
+#appView .feedback-table td:nth-child(3) { width: 24%; }
+#appView .feedback-table th:nth-child(4),
+#appView .feedback-table td:nth-child(4) { width: 22%; }
+#appView .feedback-subject { display: flex; flex-direction: column; gap: 4px; }
+#appView .feedback-subject b { color: var(--text); font-weight: 700; }
+#appView .feedback-subject span { color: var(--muted); font-size: .88rem; }
+#appView .feedback-subject small { color: var(--muted); font-size: .78rem; }
+#appView .feedback-table td:last-child { text-align: center; }
+#landingView .public-brand-mark {
+    overflow: hidden;
+    padding: 3px;
+    box-sizing: border-box;
+}
+
+#landingView .public-brand-mark img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: contain;
+    border-radius: 11px;
+}

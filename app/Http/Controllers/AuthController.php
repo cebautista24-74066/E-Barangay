@@ -50,6 +50,11 @@ class AuthController extends Controller
 
     public function login(Request $request): JsonResponse
     {
+        // Normalize pasted/user-entered email addresses before validation.
+        $request->merge([
+            'email' => strtolower(trim((string) $request->input('email'))),
+        ]);
+
         $validator = Validator::make($request->all(), [
             'email' => ['required', 'string', 'email', 'max:255'],
             'password' => ['required', 'string'],
@@ -64,7 +69,6 @@ class AuthController extends Controller
         }
 
         $credentials = $validator->validated();
-        $credentials['email'] = strtolower(trim($credentials['email']));
 
         if (! Auth::attempt([
             'email' => $credentials['email'],

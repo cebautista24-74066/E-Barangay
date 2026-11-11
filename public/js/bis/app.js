@@ -481,15 +481,13 @@ function feedbackPage() {
   const admin = mode === "admin";
   const feedback = pageData.feedback || [];
   const rows = feedback.map(item => `<tr>
-    <td>${escapeHtml(item.type)}</td><td>${escapeHtml(item.subject)}</td>
-    ${admin ? `<td>${escapeHtml(item.resident?.name || "")}<br><small>${escapeHtml(item.resident?.email || "")}</small></td>` : ""}
+    <td><div class="feedback-subject"><b>${escapeHtml(item.type)}</b><span>${escapeHtml(item.subject)}</span>${admin ? `<small>${escapeHtml(item.resident?.name || "")}</small>` : ""}</div></td>
     <td>${escapeHtml(new Date(item.created_at).toLocaleDateString())}</td><td>${statusBadge(item.status)}</td>
     <td>${button("View", "feedback-details", "secondary-btn sm", `data-id="${item.id}"`)}</td></tr>`).join("");
-  return `${heading(admin ? "Complaints & Feedback" : "Complaints & Feedback", admin ? "Review resident concerns and update their handling status." : "Send a complaint, suggestion, or feedback to the Barangay Office.", admin ? "" : button("+ Send a Message", "new-feedback"))}
-    <section class="panel"><div class="table-wrap"><table><thead><tr><th>Subject</th>${admin ? "<th>Resident</th>" : ""}<th>Date</th><th>Status</th><th>Details</th></tr></thead><tbody>${rows}</tbody></table></div>
+  return `${heading("Complaints & Feedback", admin ? "Review resident concerns and update their handling status." : "Send a complaint, suggestion, or feedback to the Barangay Office.", admin ? "" : button("+ Send a Message", "new-feedback"))}
+    <section class="panel feedback-panel"><div class="table-wrap"><table class="feedback-table"><thead><tr><th>Subject</th><th>Date</th><th>Status</th><th>Details</th></tr></thead><tbody>${rows}</tbody></table></div>
     ${feedback.length ? "" : emptyState("No messages yet", "Submitted complaints, suggestions, and feedback will appear here.")}</section>`;
 }
-
 function notificationsPage() {
   const notifications = pageData.notifications || [];
   const rows = notifications.map(notification => {
