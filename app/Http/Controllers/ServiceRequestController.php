@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Throwable;
 
@@ -21,12 +22,17 @@ class ServiceRequestController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        $this->expireOverdueRequests();
         $query = ServiceRequest::query()
-            ->with(['service:id,name', 'resident:id,name,email', 'files:id,service_request_id,original_name,mime_type,size,path', 'statusHistory.changedBy:id,name']);
+            ->with(['service:id,name', 'resident:id,name,email', 'files:id,service_request_id,original_name,mime_type,size,path', 'statusHistory.changedBy:id,name', 'archivedBy:id,name']);
 
         if ($request->user()->role !== 'Administrator') {
             $query->where('user_id', $request->user()->id);
-
+            $query->whereNull('archived_at');
+        } elseif ($request->input('archive') === 'archived') {
+            $query->whereNotNull('archived_at');
+        } elseif ($request->input('archive') !== 'all') {
+            $query->whereNull('archived_at');
         }
         if ($request->filled('status') && in_array($request->input('status'), ServiceRequest::STATUSES, true)) {
             $query->where('status', $request->input('status'));
@@ -99,6 +105,7 @@ class ServiceRequestController extends Controller
     public function show(Request $request, ServiceRequest $serviceRequest): JsonResponse
     {
         $this->authorizeRequest($request, $serviceRequest);
+        $this->expireOverdueRequests($serviceRequest);
 
         return response()->json(['request' => $this->loadRequest($serviceRequest)]);
     }
@@ -113,11 +120,25 @@ class ServiceRequestController extends Controller
         ])->validate();
 
         $previousStatus = $serviceRequest->status;
+        $allowedTransitions = [
+            'Pending' => ['Pending', 'Processing', 'Rejected'],
+            'Processing' => ['Processing', 'Ready for Pickup', 'Rejected'],
+            'Ready for Pickup' => ['Ready for Pickup', 'Claimed'],
+            'Claimed' => ['Claimed'],
+            'Expired' => ['Expired'],
+            'Rejected' => ['Rejected'],
+        ];
+        if (! in_array($data['status'], $allowedTransitions[$previousStatus] ?? [$previousStatus], true)) {
+            throw ValidationException::withMessages(['status' => "A request marked {$previousStatus} cannot be moved back to {$data['status']}."]);
+        }
+        $pickupWindowDays = (int) (DB::table('barangay_settings')->where('key', 'pickup_window_days')->value('value') ?: 3);
 
-        DB::transaction(function () use ($request, $serviceRequest, $data, $previousStatus): void {
+        DB::transaction(function () use ($request, $serviceRequest, $data, $previousStatus, $pickupWindowDays): void {
             $serviceRequest->update([
                 'status' => $data['status'],
                 'admin_note' => $data['admin_note'] ?? null,
+                'ready_for_pickup_at' => $data['status'] === 'Ready for Pickup' && $previousStatus !== 'Ready for Pickup' ? now() : (in_array($data['status'], ['Ready for Pickup', 'Claimed', 'Expired'], true) ? $serviceRequest->ready_for_pickup_at : null),
+                'pickup_deadline' => $data['status'] === 'Ready for Pickup' && $previousStatus !== 'Ready for Pickup' ? now()->addDays($pickupWindowDays)->endOfDay() : (in_array($data['status'], ['Ready for Pickup', 'Claimed', 'Expired'], true) ? $serviceRequest->pickup_deadline : null),
             ]);
 
             if ($previousStatus !== $data["status"]) {
@@ -154,6 +175,41 @@ class ServiceRequestController extends Controller
             'request' => $this->loadRequest($serviceRequest->fresh()),
             'message' => 'Request status updated.',
         ]);
+    }
+
+    public function archive(Request $request, ServiceRequest $serviceRequest): JsonResponse
+    {
+        abort_unless($request->user()->role === 'Administrator', 403);
+        $data = Validator::make($request->all(), ['reason' => ['nullable', 'string', 'max:2000']])->validate();
+        $serviceRequest->update(['archived_at' => now(), 'archived_by' => $request->user()->id, 'archive_reason' => $data['reason'] ?? null]);
+        return response()->json(['message' => 'Request archived.']);
+    }
+
+    public function restore(Request $request, ServiceRequest $serviceRequest): JsonResponse
+    {
+        abort_unless($request->user()->role === 'Administrator', 403);
+        $serviceRequest->update(['archived_at' => null, 'archived_by' => null, 'archive_reason' => null]);
+        return response()->json(['message' => 'Request restored.']);
+    }
+
+    public function claim(Request $request, ServiceRequest $serviceRequest): JsonResponse
+    {
+        abort_unless($request->user()->id === $serviceRequest->user_id, 403);
+        $this->expireOverdueRequests($serviceRequest);
+        $serviceRequest->refresh();
+        abort_unless($serviceRequest->status === 'Ready for Pickup', 422, 'This request is no longer available for claiming.');
+
+        DB::transaction(function () use ($request, $serviceRequest): void {
+            $serviceRequest->update(['status' => 'Claimed']);
+            $serviceRequest->statusHistory()->create([
+                'changed_by' => $request->user()->id,
+                'from_status' => 'Ready for Pickup',
+                'to_status' => 'Claimed',
+                'note' => 'Resident marked the request as claimed.',
+            ]);
+        });
+
+        return response()->json(['request' => $this->loadRequest($serviceRequest->fresh()), 'message' => 'Request marked as claimed.']);
     }
 
     public function downloadFile(Request $request, ServiceRequestFile $file): BinaryFileResponse
@@ -194,6 +250,7 @@ class ServiceRequestController extends Controller
             'resident:id,name,email',
             'files:id,service_request_id,original_name,mime_type,size,path',
             'statusHistory.changedBy:id,name',
+            'archivedBy:id,name',
         ]);
 
         $loaded->files->each(function (ServiceRequestFile $file): void {
@@ -203,6 +260,24 @@ class ServiceRequestController extends Controller
         });
 
         return $loaded;    }
+
+    private function expireOverdueRequests(?ServiceRequest $only = null): void
+    {
+        $query = ServiceRequest::query()
+            ->where('status', 'Ready for Pickup')
+            ->whereNotNull('pickup_deadline')
+            ->where('pickup_deadline', '<', now());
+        if ($only) $query->whereKey($only->id);
+        $query->each(function (ServiceRequest $request): void {
+            $request->update(['status' => 'Expired']);
+            $request->statusHistory()->create([
+                'changed_by' => $request->user_id,
+                'from_status' => 'Ready for Pickup',
+                'to_status' => 'Expired',
+                'note' => 'Pickup deadline passed.',
+            ]);
+        });
+    }
 
     private function authorizeRequest(Request $request, ServiceRequest $serviceRequest): void
     {

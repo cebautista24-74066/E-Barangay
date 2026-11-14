@@ -20,6 +20,7 @@ class ReportController extends Controller
             'total_residents' => User::query()->where('role', 'Resident')->count(),
             'total_services' => BarangayService::query()->where('is_active', true)->count(),
             'total_requests' => ServiceRequest::query()->count(),
+            'expiring_soon' => ServiceRequest::query()->where('status', 'Ready for Pickup')->whereBetween('pickup_deadline', [now(), now()->addDays(3)])->count(),
             'requests_by_status' => ServiceRequest::query()
                 ->selectRaw('status, count(*) as total')
                 ->groupBy('status')
@@ -43,7 +44,7 @@ class ReportController extends Controller
 
         return response()->streamDownload(function (): void {
             $output = fopen('php://output', 'w');
-            fputcsv($output, ['Reference', 'Resident', 'Email', 'Service', 'Purpose', 'Status', 'Submitted At', 'Admin Note']);
+            fputcsv($output, ['Reference', 'Resident', 'Email', 'Service', 'Purpose', 'Status', 'Submitted At', 'Ready for Pickup', 'Pickup Deadline', 'Archived At', 'Admin Note']);
 
             ServiceRequest::query()
                 ->with(['resident:id,name,email', 'service:id,name'])
@@ -58,6 +59,9 @@ class ReportController extends Controller
                             $this->spreadsheetSafe($serviceRequest->purpose),
                             $this->spreadsheetSafe($serviceRequest->status),
                             $this->spreadsheetSafe($serviceRequest->created_at?->toDateTimeString()),
+                            $this->spreadsheetSafe($serviceRequest->ready_for_pickup_at?->toDateTimeString()),
+                            $this->spreadsheetSafe($serviceRequest->pickup_deadline?->toDateTimeString()),
+                            $this->spreadsheetSafe($serviceRequest->archived_at?->toDateTimeString()),
                             $this->spreadsheetSafe($serviceRequest->admin_note),
                         ]);
                     }

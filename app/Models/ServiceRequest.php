@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ServiceRequest extends Model
 {
-    public const STATUSES = ['Pending', 'Processing', 'Approved', 'Rejected', 'Completed'];
+    public const STATUSES = ['Pending', 'Processing', 'Ready for Pickup', 'Claimed', 'Expired', 'Rejected'];
 
     protected $fillable = [
         'reference_code',
@@ -17,6 +17,17 @@ class ServiceRequest extends Model
         'purpose',
         'status',
         'admin_note',
+        'ready_for_pickup_at',
+        'pickup_deadline',
+        'archived_at',
+        'archived_by',
+        'archive_reason',
+    ];
+
+    protected $casts = [
+        'ready_for_pickup_at' => 'datetime',
+        'pickup_deadline' => 'datetime',
+        'archived_at' => 'datetime',
     ];
 
     public function resident(): BelongsTo
@@ -37,5 +48,10 @@ class ServiceRequest extends Model
     public function statusHistory(): HasMany
     {
         return $this->hasMany(ServiceRequestStatusHistory::class)->latest();
+    }
+
+    public function archivedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'archived_by');
     }
 }

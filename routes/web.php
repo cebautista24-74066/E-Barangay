@@ -10,6 +10,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ResidentFeedbackController;
 use App\Http\Controllers\ServiceRequestController;
+use App\Http\Controllers\BarangaySettingController;
 use App\Http\Middleware\EnsureActiveAccount;
 use Illuminate\Support\Facades\Route;
 
@@ -46,6 +47,8 @@ Route::middleware(['auth', EnsureActiveAccount::class, 'admin.audit'])->group(fu
     Route::patch('/api/residents/{user}', [AdminResidentController::class, 'update']);
     Route::delete('/api/residents/{user}', [AdminResidentController::class, 'destroy']);
     Route::get('/api/admin/users/admins', [AdminResidentController::class, 'admins']);
+    Route::get('/api/admin/settings', [BarangaySettingController::class, 'show']);
+    Route::patch('/api/admin/settings', [BarangaySettingController::class, 'update']);
     Route::post('/api/admin/users/admin', [AdminResidentController::class, 'storeAdmin']);
     Route::patch('/api/admin/users/admins/{user}/status', [AdminResidentController::class, 'toggleAdminStatus']);
     Route::delete('/api/admin/users/admins/{user}', [AdminResidentController::class, 'destroyAdmin']);
@@ -66,6 +69,9 @@ Route::middleware(['auth', EnsureActiveAccount::class, 'admin.audit'])->group(fu
     Route::post('/api/requests', [ServiceRequestController::class, 'store'])->middleware('throttle:10,1');
     Route::get('/api/requests/{serviceRequest}', [ServiceRequestController::class, 'show']);
     Route::patch('/api/requests/{serviceRequest}/status', [ServiceRequestController::class, 'updateStatus']);
+    Route::patch('/api/requests/{serviceRequest}/claim', [ServiceRequestController::class, 'claim']);
+    Route::patch('/api/requests/{serviceRequest}/archive', [ServiceRequestController::class, 'archive']);
+    Route::patch('/api/requests/{serviceRequest}/restore', [ServiceRequestController::class, 'restore']);
     Route::get('/api/request-files/{file}', [ServiceRequestController::class, 'downloadFile']);
 
     Route::get('/api/feedback', [ResidentFeedbackController::class, 'index']);

@@ -23,8 +23,9 @@ let drrmPickedLocation = null;
 let drrmDrawing = null; // { latlngs: [], drawLayer: L.LayerGroup, polygon: L.Polygon }
 let drrmDrawLayer = null;
 let drrmCenterLocationReady = false;
+let renderVersion = 0;
 
-const requestStatuses = ["Pending", "Processing", "Approved", "Rejected", "Completed"];
+const requestStatuses = ["Pending", "Processing", "Ready for Pickup", "Claimed", "Expired", "Rejected"];
 const feedbackStatuses = ["Open", "In Review", "Resolved", "Closed"];
 const residentNav = [
   ["Dashboard", "home"],
@@ -414,12 +415,12 @@ function requestsPage(admin = false) {
     <td>${escapeHtml(request.service?.name || "")}</td>
     <td>${escapeHtml(new Date(request.created_at).toLocaleDateString())}</td>
     <td>${statusBadge(request.status)}</td>
-    <td>${button("Details", "request-details", "secondary-btn sm", `data-id="${request.id}"`)}</td>\n    ${!admin ? `<td class="request-download-cell"><div class="download-menu"><button type="button" class="secondary-btn sm download-toggle" data-action="toggle-download-menu" ${request.status !== "Approved" ? "disabled" : ""}>Download <span>▾</span></button><div class="download-menu-options hidden">${button("Download as PDF", "download-request", "download-option", `data-id="${request.id}" data-format="pdf"`)}${button("Download as PNG", "download-request", "download-option", `data-id="${request.id}" data-format="png"`)}</div></div></td>` : ""}
+    <td>${request.pickup_deadline ? `<small>Claim before ${escapeHtml(new Date(request.pickup_deadline).toLocaleDateString())}</small><br>` : ""}<div class="table-actions">${button("Details", "request-details", "secondary-btn sm", `data-id="${request.id}"`)}${admin ? (request.archived_at ? button("Restore", "restore-request", "secondary-btn sm", `data-id="${request.id}"`) : button("Archive", "archive-request", "danger-btn sm", `data-id="${request.id}"`)) : ""}</div></td>
   </tr>`).join("");
   const statusOptions = [`<option value="">All statuses</option>`, ...requestStatuses.map(status => `<option>${status}</option>`)].join("");
   return `${heading(admin ? "Manage Requests" : "My Requests", admin ? "Review submissions and record request status updates." : "Track the status and history of your requests.", admin ? "" : button("+ New Request", "new-request"))}
-    <section class="panel"><div class="filters"><input id="requestSearch" placeholder="Search reference, resident, or service..."><select id="requestStatus">${statusOptions}</select></div>
-    <div class="table-wrap"><table><thead><tr><th>Reference</th>${admin ? "<th>Resident</th>" : ""}<th>Service</th><th>Date Submitted</th><th>Status</th><th>Details</th>${!admin ? "<th>Download</th>" : ""}</tr></thead><tbody>${rows}</tbody></table></div>
+    <section class="panel"><div class="filters"><input id="requestSearch" placeholder="Search reference, resident, or service..."><select id="requestStatus">${statusOptions}</select>${admin ? `<select id="requestArchive"><option value="active">Active Requests</option><option value="archived">Archived Requests</option><option value="all">All Requests</option></select>` : ""}</div>
+    <div class="table-wrap"><table><thead><tr><th>Reference</th>${admin ? "<th>Resident</th>" : ""}<th>Service</th><th>Date Submitted</th><th>Status</th><th>Pickup / Details</th></tr></thead><tbody>${rows}</tbody></table></div>
     ${requests.length ? "" : emptyState("No requests yet", "Submitted service requests and their status history will appear here.")}</section>`;
 }
 
@@ -442,8 +443,9 @@ function drrmPage() {
   const rows = drrm.households.map(item => `<tr data-drrm-row="household" data-id="${item.id}"><td>${escapeHtml(item.household_number)}</td><td>${escapeHtml(item.address)}</td><td>${escapeHtml(item.sitio || item.purok || '')}</td><td>${statusBadge(item.priority_level)}</td><td>${item.resident_count || item.members?.length || 0}</td><td><div class="table-actions">${button('Edit', 'edit-drrm-household', 'secondary-btn sm', `data-id="${item.id}"`)}${button('Delete', 'delete-drrm-household', 'danger-btn sm', `data-id="${item.id}"`)}</div></td></tr>`).join('');
   const centerRows = drrm.evacuation_centers.map(center => { const cap = Number(center.capacity || 0); const occ = Number(center.current_occupants || 0); const free = Math.max(0, cap - occ); return `<tr><td>${escapeHtml(center.name)}</td><td>${cap || 'N/A'}</td><td>${occ}</td><td>${cap ? free : 'N/A'}</td><td>${statusBadge(center.status || (free === 0 ? 'Full' : 'Open'))}</td><td><div class="table-actions">${button('Edit', 'edit-drrm-center', 'secondary-btn sm', `data-id="${center.id}"`)}${button('Delete', 'delete-drrm-center', 'danger-btn sm', `data-id="${center.id}"`)}</div></td></tr>`; }).join('');
   const drrmIcons = { households: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10Z"/><path d="M9 21v-6h6v6"/></svg>', priority: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 21 19H3L12 3Z"/><path d="M12 9v4M12 16h.01"/></svg>', vulnerable: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M10 8h3l1 4h-3l-1 4h5a4 4 0 1 1-1 2"/><path d="M10 8 8 12l-3 1"/><circle cx="15" cy="19" r="1.5"/></svg>', slots: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/><circle cx="12" cy="12" r="9"/></svg>' };
-  return `${heading('DRRM Priority Map', 'Monitor vulnerable households and evacuation capacity from one map.', button('+ Add Household', 'new-household') + button('+ Add Center', 'new-drrm-center') + button('Refresh map', 'refresh'))}
+  return `${heading('DRRM Priority Map', 'Monitor vulnerable households and evacuation capacity from one map.')}
     <div class="stats-grid drrm-summary">${stat('Total households', summary.total_households || 0, drrmIcons.households, 'blue')}${stat('Vulnerable residents', summary.total_vulnerable_residents || 0, drrmIcons.vulnerable, 'purple')}${stat('Available evacuation slots', available, drrmIcons.slots, 'green')}</div>
+    <div class="drrm-action-bar">${button('+ Add Household', 'new-household')}${button('+ Add Center', 'new-drrm-center')}${button('Refresh map', 'refresh')}</div>
     <section class="panel drrm-map-panel"><div class="drrm-map-toolbar"><div class="drrm-mode-buttons"><button class="secondary-btn sm" data-action="drrm-view-mode">View Only</button><button class="secondary-btn sm" data-action="drrm-select-mode">Select Location</button></div><div class="drrm-map-actions"><button class="secondary-btn sm" data-action="drrm-locate">Locate me</button><button class="secondary-btn sm" data-action="drrm-fit">Zoom to markers</button><button class="secondary-btn sm" data-action="drrm-fullscreen">Fullscreen</button></div></div><div id="drrmMap" style="height:520px;border-radius:16px;overflow:hidden"></div></section>
     <section class="panel"><div class="filters drrm-filters"><input id="drrmSearch" placeholder="Search household, address, or sitio..."><select id="drrmPriority"><option value="">All priorities</option><option>Critical</option><option>High</option><option>Moderate</option><option>Low</option></select></div><div class="panel-head"><h3>Priority Households</h3></div><div class="table-wrap"><table><thead><tr><th>Household</th><th>Address</th><th>Sitio/Purok</th><th>Priority</th><th>Residents</th><th>Actions</th></tr></thead><tbody>${rows || `<tr><td colspan="6">No DRRM household records yet.</td></tr>`}</tbody></table></div></section>
     <section class="panel"><div class="panel-head"><h3>Evacuation Capacity</h3><span class="muted">${summary.evacuation_centers || 0} active centers</span></div><div class="table-wrap"><table><thead><tr><th>Center</th><th>Capacity</th><th>Occupied</th><th>Available</th><th>Status</th><th>Actions</th></tr></thead><tbody>${centerRows || '<tr><td colspan="6">No evacuation centers.</td></tr>'}</tbody></table></div></section>`;
@@ -464,6 +466,7 @@ function renderDrrmMap() {
   const nearestCenter = h => centers.reduce((best, c) => { const dist = drrmDistanceKm([Number(h.latitude), Number(h.longitude)], [Number(c.latitude), Number(c.longitude)]); return !best || dist < best.distance ? { center: c, distance: dist } : best; }, null); const colors = { Critical: '#dc2626', High: '#ea580c', Moderate: '#ca8a04', Low: '#16a34a' };
   households.forEach(h => { const near = nearestCenter(h); const popup = `<b>${escapeHtml(h.household_number)}</b><br>${escapeHtml(h.address || '')}<br>Sitio/Purok: ${escapeHtml(h.sitio || h.purok || 'Not specified')}<br>Priority: ${escapeHtml(h.priority_level)}<hr>Residents: ${h.resident_count || 0}<br>Seniors: ${h.senior_count || 0} · PWD: ${h.pwd_count || 0}<br>Bedridden: ${h.bedridden_count || 0} · Pregnant: ${h.pregnant_count || 0}<br>Infants: ${h.infant_count || 0}<br>Medical/rescue notes: ${escapeHtml(h.notes || 'None')}${near ? `<br>Nearest center: ${escapeHtml(near.center.name)}<br>Distance: ${near.distance.toFixed(2)} km` : ''}<br><br>${button('Edit', 'edit-drrm-household', 'secondary-btn sm', `data-id="${h.id}"`)} ${button('Delete', 'delete-drrm-household', 'danger-btn sm', `data-id="${h.id}"`)}`; const marker = L.circleMarker([h.latitude, h.longitude], { radius: 8, color: colors[h.priority_level] || colors.Low, fillColor: colors[h.priority_level] || colors.Low, fillOpacity: .9 }).bindPopup(popup); marker.drrmData = h; marker.addTo(householdLayer); householdMarkers.push(marker); });
   centers.forEach(c => { const cap = Number(c.capacity || 0); const occ = Number(c.current_occupants || 0); const free = Math.max(0, cap - occ); const status = c.status || (free === 0 && cap ? 'Full' : 'Open'); L.marker([c.latitude, c.longitude]).bindPopup(`<b>${escapeHtml(c.name)}</b><br>${escapeHtml(c.address)}<br>Capacity: ${cap || 'Not set'}<br>Occupied: ${occ}<br>Available: ${cap ? free : 'Not set'}<br>Status: ${escapeHtml(status)}<br><br>${button('Edit', 'edit-drrm-center', 'secondary-btn sm', `data-id="${c.id}"`)} ${button('Delete', 'delete-drrm-center', 'danger-btn sm', `data-id="${c.id}"`)}`).addTo(centerLayer); });
+  requestAnimationFrame(() => { map.invalidateSize(); const layers = [...householdLayer.getLayers(), ...centerLayer.getLayers()]; if (layers.length) { const group = L.featureGroup(layers); map.fitBounds(group.getBounds().pad(.15), { maxZoom: 16 }); } });
   applyDrrmFilters();
 }
 
@@ -508,16 +511,21 @@ function reportsPage() {
   const statusCounts = report.requests_by_status || {};
   const statuses = [...new Set([...requestStatuses, ...Object.keys(statusCounts)])];
   const total = Number(report.total_requests || 0);
-  const bars = statuses.map(status => {
+  const statusDescriptions = { Pending: "Awaiting review", Processing: "Being processed", "Ready for Pickup": "Available to claim", Claimed: "Successfully claimed", Expired: "Pickup window passed", Rejected: "Request not approved" };
+  const statusCards = statuses.map(status => {
     const count = Number(statusCounts[status] || 0);
-    const width = total ? Math.max(count / total * 100, count ? 4 : 0) : 0;
-    return `<div class="report-status-row"><span>${statusBadge(status)}</span><div class="report-bar"><i style="width:${width}%"></i></div><b>${count}</b></div>`;
+    return `<article class="report-status-card report-${statusClass(status)}"><div class="report-status-card-top"><span class="report-status-dot"></span>${statusBadge(status)}</div><strong>${count}</strong><small>${escapeHtml(statusDescriptions[status] || "Request records")}</small></article>`;
   }).join("");
   const services = (report.requests_by_service || []).map(item => `<tr><td>${escapeHtml(item.service)}</td><td>${Number(item.total)}</td></tr>`).join("");
+  const attention = [
+    ["Ready for Pickup", Number(statusCounts["Ready for Pickup"] || 0), "Residents can claim these requests."],
+    ["Expiring Soon", Number(report.expiring_soon || 0), "Pickup deadlines are approaching."],
+    ["Rejected", Number(statusCounts.Rejected || 0), "Review rejected requests and notes."]
+  ];
   return `${heading("Reports", "Monitor service activity and export request records.", button("Export Requests CSV", "export-csv", "secondary-btn"))}
     <div class="reports-grid">${stat("Total Residents", report.total_residents || 0, uiIcon("user"))}${stat("Published Services", report.total_services || 0, uiIcon("services"), "purple")}${stat("Total Requests", total, uiIcon("requests"), "green")}</div>
-    <div class="dashboard-columns"><section class="panel"><div class="panel-head"><h3>Requests by Status</h3></div><div class="report-status-list">${bars}</div></section>
-    <section class="panel"><div class="panel-head"><h3>Requests by Service</h3></div><div class="table-wrap"><table><thead><tr><th>Service</th><th>Requests</th></tr></thead><tbody>${services || `<tr><td colspan="2">No request records.</td></tr>`}</tbody></table></div></section></div>`;
+    <div class="dashboard-columns reports-panels"><section class="panel report-panel"><div class="panel-head"><div><h3>Request status overview</h3><p class="muted">Track every request from submission to pickup.</p></div></div><div class="report-status-grid">${statusCards}</div><div class="request-flow"><span>Pending</span><i>→</i><span>Processing</span><i>→</i><span>Ready for Pickup</span><i>→</i><span>Claimed</span></div></section>
+    <section class="panel report-panel"><div class="panel-head"><div><h3>Requests by service</h3><p class="muted">Compare demand across published services.</p></div></div><div class="table-wrap"><table><thead><tr><th>Service</th><th>Requests</th></tr></thead><tbody>${services || `<tr><td colspan="2"><div class="report-empty">No request records yet.</div></td></tr>`}</tbody></table></div></section></div>`;
 }
 
 function auditLogsPage() { const data = pageData.auditLogs || { logs: { data: [] } }; const rows = (data.logs.data || []).map(log => `<tr><td>${escapeHtml(log.user?.name || "System")}</td><td>${escapeHtml(log.action)}</td><td>${escapeHtml(log.module)}</td><td>${escapeHtml(log.description || "")}</td><td>${escapeHtml(new Date(log.created_at).toLocaleString())}</td><td>${statusBadge(log.status)}</td></tr>`).join(""); return `${heading(mode === "admin" ? "Audit Logs" : "My Activity", mode === "admin" ? "Review system activity." : "Review your account activity.", mode === "admin" ? button("Print / Save PDF", "export-audit-pdf", "secondary-btn") : "")}<section class="panel"><form id="auditLogFilters" class="filters"><input type="date" name="from" value="${escapeHtml(pageData.auditFilters?.from || "")}"><input type="date" name="to" value="${escapeHtml(pageData.auditFilters?.to || "")}"><button type="submit" class="primary-btn sm">Apply Filter</button><button type="button" class="secondary-btn sm" data-action="clear-audit-filters">Clear</button></form><div class="table-wrap"><table><thead><tr><th>User</th><th>Action</th><th>Module</th><th>Description</th><th>Date/Time</th><th>Status</th></tr></thead><tbody>${rows || `<tr><td colspan="6">No audit records found.</td></tr>`}</tbody></table></div></section>`; }
@@ -526,7 +534,9 @@ function settingsPage() {
   const admins = mode === "admin" ? (pageData.admins || []) : [];
   const adminList = admins.map(admin => { const isSelf = admin.email === currentUser?.email; const actions = isSelf ? `<small class="admin-current-label">Current account</small>` : `<div class="admin-account-actions">${button(admin.is_active ? "Deactivate" : "Activate", "toggle-admin", "secondary-btn sm", `data-id="${admin.id}"`)}${button("Delete", "delete-admin", "danger-btn sm", `data-id="${admin.id}"`)}</div>`; return `<div class="admin-account-row"><div><b>${escapeHtml(admin.name)}</b><small>${escapeHtml(admin.email)}</small></div><div class="admin-account-meta">${statusBadge(admin.is_active ? "Active" : "Inactive")}${actions}</div></div>`; }).join("");
   const adminTools = mode === "admin" ? `<h3 style="margin-top:24px">Administrator access</h3><p class="muted" style="margin-top:8px">Create and review trusted administrator accounts. This section is available only to current administrators.</p><button class="secondary-btn" data-action="new-admin">+ Add Administrator</button><div class="admin-account-list">${adminList || `<p class="muted">No administrator accounts found.</p>`}</div>` : "";
-  return `${heading("Settings", "Account and display preferences.")}<section class="panel"><h3>Display</h3><p class="muted" style="margin-top:8px">Your light or dark theme preference is saved in this browser.</p><button class="secondary-btn" data-action="toggle-theme">Switch theme</button>
+  const pickup = Number(pageData.pickup_window_days || 3);
+  const pickupSettings = mode === "admin" ? `<h3 style="margin-top:24px">Request pickup window</h3><p class="muted" style="margin-top:8px">Requests will automatically expire this many calendar days after they become Ready for Pickup.</p><form id="pickupWindowForm" class="form-grid"><div class="form-field"><label>Pickup window (days)</label><input class="form-control" type="number" name="pickup_window_days" min="1" max="30" value="${pickup}" required></div><div class="form-field"><button class="primary-btn sm" type="submit">Save pickup window</button></div><p class="auth-feedback" id="pickupWindowFeedback" role="alert"></p></form>` : "";
+  return `${heading("Settings", "Account and display preferences.")}<section class="panel"><h3>Display</h3><p class="muted" style="margin-top:8px">Your light or dark theme preference is saved in this browser.</p><button class="secondary-btn" data-action="toggle-theme">Switch theme</button>${pickupSettings}
     ${adminTools}</section>`;
 }
 
@@ -556,7 +566,7 @@ async function loadPageData() {
       return;
     case "My Requests":
     case "Manage Requests":
-      pageData.requests = (await api("/api/requests")).data.requests;
+      pageData.requests = (await api(`/api/requests${mode === "admin" ? `?archive=${pageData.requestArchive || "active"}` : ""}`)).data.requests;
       return;
     case "Announcements":
       pageData.announcements = (await api("/api/announcements")).data.announcements;
@@ -568,7 +578,7 @@ async function loadPageData() {
       pageData.drrm = (await api("/api/admin/drrm")).data;
       return;
     case "Settings":
-      if (mode === "admin") pageData.admins = (await api("/api/admin/users/admins")).data.admins;
+      if (mode === "admin") { const [admins, settings] = await Promise.all([api("/api/admin/users/admins"), api("/api/admin/settings")]); pageData.admins = admins.data.admins; pageData.pickup_window_days = settings.data.pickup_window_days; }
       return;
     case "Manage Residents":
       pageData.residents = (await api("/api/residents")).data.residents;
@@ -619,6 +629,7 @@ function loadingSkeleton() {
   </div>`;
 }
 async function render() {
+  const currentRender = ++renderVersion;
   $("#currentCrumb").textContent = page === "Dashboard" ? "Home" : page;
   renderNav();
 
@@ -626,9 +637,11 @@ async function render() {
 
   try {
     await loadPageData();
+    if (currentRender !== renderVersion) return;
     $("#pageContent").innerHTML = renderContent();
     if (page === "DRRM Map") renderDrrmMap();
   } catch (error) {
+    if (currentRender !== renderVersion) return;
     $("#pageContent").innerHTML = `<section class="panel"><div class="empty-state"><h3>Unable to load ${escapeHtml(page.toLowerCase())}</h3><p>${escapeHtml(error.message)}</p><button class="secondary-btn" data-action="retry">Try again</button></div></section>`;
   }
 }
@@ -709,6 +722,18 @@ function openReadOnlyModal(title, content) {
   document.querySelector("#appView .topbar")?.classList.add("hidden");
 }
 
+function confirmAction(title, message, confirmLabel = "Confirm") {
+  return new Promise(resolve => {
+    const layer = $("#modalLayer");
+    layer.innerHTML = `<div class="modal-card confirmation-modal"><h2>${escapeHtml(title)}</h2><p>${escapeHtml(message)}</p><div class="modal-actions"><button type="button" class="secondary-btn" data-confirm-cancel>Cancel</button><button type="button" class="danger-btn" data-confirm-accept>${escapeHtml(confirmLabel)}</button></div></div>`;
+    layer.classList.remove("hidden");
+    document.querySelector("#appView .topbar")?.classList.add("hidden");
+    const finish = value => { layer.classList.add("hidden"); document.querySelector("#appView .topbar")?.classList.remove("hidden"); resolve(value); };
+    layer.querySelector("[data-confirm-cancel]").addEventListener("click", () => finish(false), { once: true });
+    layer.querySelector("[data-confirm-accept]").addEventListener("click", () => finish(true), { once: true });
+  });
+}
+
 function serviceFields(service = {}) {
   return [
     { name: "name", label: "Service name", value: service.name, required: true, maxLength: 255, full: true },
@@ -772,14 +797,17 @@ async function viewRequest(id) {
   const request = pageData.requests.find(item => String(item.id) === String(id));
   if (!request) throw new Error("The selected request could not be found.");
   const history = (request.status_history || []).map(item => `<li><b>${escapeHtml(item.to_status)}</b> · ${escapeHtml(new Date(item.created_at).toLocaleString())}<br><small>${escapeHtml(item.changed_by?.name || "Resident")}${item.note ? ` — ${escapeHtml(item.note)}` : ""}</small></li>`).join("");
-  const files = (request.files || []).map(file => { const url = file.preview_url || new URL(`api/request-files/${file.id}`, document.baseURI).href; const isImage = /^image\/(jpeg|png|jpg|gif|webp)$/i.test(file.mime_type || ""); return `<li class="request-file"><a href="${url}" class="request-file-link">${isImage ? `<img class="request-file-preview" src="${url}" alt="${escapeHtml(file.original_name)}" loading="lazy">` : `<span class="request-file-icon">DOC</span>`}<span class="request-file-name">${escapeHtml(file.original_name)} <small>(${Math.ceil(file.size / 1024)} KB)</small></span></a></li>`; }).join("");
-  const downloadControls = mode !== "admin" && request.status === "Approved" ? `<div class="request-download-actions"><b>Download approved document</b><div>${button("PDF", "download-request", "secondary-btn sm", `data-id="${request.id}" data-format="pdf"`)}${button("PNG", "download-request", "secondary-btn sm", `data-id="${request.id}" data-format="png"`)}</div></div>` : "";
+  const files = (request.files || []).map(file => { const isImage = /^image\/(jpeg|png|jpg|gif|webp)$/i.test(file.mime_type || ""); return `<li class="request-file">${isImage && file.preview_url ? `<img class="request-file-preview" src="${file.preview_url}" alt="${escapeHtml(file.original_name)}" loading="lazy">` : `<span class="request-file-icon">DOC</span>`}<span class="request-file-name">${escapeHtml(file.original_name)} <small>(${Math.ceil(file.size / 1024)} KB)</small></span></li>`; }).join("");
+  const pickupInfo = request.ready_for_pickup_at ? `<p><b>Pickup available:</b> ${escapeHtml(new Date(request.ready_for_pickup_at).toLocaleDateString())}${request.pickup_deadline ? ` to ${escapeHtml(new Date(request.pickup_deadline).toLocaleDateString())}` : ""}</p>` : "";
+  const transitionOptions = ({ Pending: ["Pending", "Processing", "Rejected"], Processing: ["Processing", "Ready for Pickup", "Rejected"], "Ready for Pickup": ["Ready for Pickup", "Claimed"], Claimed: ["Claimed"], Expired: ["Expired"], Rejected: ["Rejected"] }[request.status] || [request.status]).map(status => `<option ${status === request.status ? "selected" : ""}>${status}</option>`).join("");
   const adminControls = mode === "admin" ? `<form id="requestStatusForm" class="form-grid" data-id="${request.id}">
-    <div class="form-field"><label>Update status</label><select class="form-control" name="status" required>${requestStatuses.map(status => `<option ${status === request.status ? "selected" : ""}>${status}</option>`).join("")}</select></div>
+    <div class="form-field"><label>Update status</label><select class="form-control" name="status" required>${transitionOptions}</select></div>
     <div class="form-field full-width"><label>Staff note</label><textarea class="form-control" name="admin_note" maxlength="2000">${escapeHtml(request.admin_note || "")}</textarea></div>
     <div class="form-field full-width"><button class="primary-btn sm" type="submit">Save status</button></div><p class="auth-feedback" id="requestStatusFeedback" role="alert"></p>
   </form>` : request.admin_note ? `<p><b>Barangay note:</b> ${escapeHtml(request.admin_note)}</p>` : "";
-  openReadOnlyModal(request.reference_code, `<p><b>Service:</b> ${escapeHtml(request.service?.name || "")}</p><p><b>Status:</b> ${statusBadge(request.status)}</p><p><b>Purpose:</b><br>${escapeHtml(request.purpose)}</p><h3>Submitted documents</h3><ul>${files || "<li>No files attached</li>"}</ul><h3>Status history</h3><ol>${history || "<li>No status history</li>"}</ol>${downloadControls}${adminControls}`);
+  const residentClaimControl = mode !== "admin" && request.status === "Ready for Pickup" ? `<div class="request-claim-actions"><p>Your request is ready to be picked up.</p>${button("Mark as Claimed", "claim-request", "primary-btn sm", `data-id="${request.id}"`)}</div>` : "";
+  const archiveInfo = request.archived_at ? `<p><b>Archived:</b> ${escapeHtml(new Date(request.archived_at).toLocaleString())}${request.archived_by?.name ? ` by ${escapeHtml(request.archived_by.name)}` : ""}${request.archive_reason ? `<br><b>Reason:</b> ${escapeHtml(request.archive_reason)}` : ""}</p>` : "";
+  openReadOnlyModal(request.reference_code, `<p><b>Service:</b> ${escapeHtml(request.service?.name || "")}</p><p><b>Status:</b> ${statusBadge(request.status)}</p>${pickupInfo}${residentClaimControl}${archiveInfo}<p><b>Purpose:</b><br>${escapeHtml(request.purpose)}</p><h3>Submitted documents</h3><ul>${files || "<li>No files attached</li>"}</ul><h3>Status history</h3><ol>${history || "<li>No status history</li>"}</ol>${adminControls}`);
 }
 
 async function createFeedback() {
@@ -851,8 +879,8 @@ function openDrrmHouseholdModal() {
       <div class="form-field full-width"><label>Reference number</label><input class="form-control" name="household_number" value="${reference}" readonly><small>Automatically generated by the system.</small></div>
       <div class="form-field full-width"><label>House Number / Address / Landmark <b>*</b></label><input class="form-control" name="address" placeholder="e.g. 9999 or near Humayingan Elementary School" required><small class="field-error" data-error="address"></small></div>
       <div class="form-field"><label>Sitio / Purok</label><input class="form-control" name="sitio" placeholder="e.g. Sitio 1"></div>
-      <div class="form-field coordinate-field"><label>Latitude (°) <b>*</b></label><input class="form-control" name="latitude" type="number" step="any" min="-90" max="90" value="13.9965" required><small class="field-error" data-error="latitude"></small></div>
-      <div class="form-field coordinate-field"><label>Longitude (°) <b>*</b></label><input class="form-control" name="longitude" type="number" step="any" min="-180" max="180" value="120.6732" required><small class="field-error" data-error="longitude"></small></div>
+      <div class="form-field coordinate-field"><label>Latitude (°) <b>*</b></label><input class="form-control" name="latitude" type="number" step="any" min="-90" max="90" value="${drrmPickedLocation?.latitude?.toFixed(6) || ""}" readonly required><small class="field-error" data-error="latitude"></small></div>
+      <div class="form-field coordinate-field"><label>Longitude (°) <b>*</b></label><input class="form-control" name="longitude" type="number" step="any" min="-180" max="180" value="${drrmPickedLocation?.longitude?.toFixed(6) || ""}" readonly required><small class="field-error" data-error="longitude"></small></div>
       <div class="form-field full-width"><button type="button" class="secondary-btn location-button" data-use-location>Use my current location</button><small>Allow browser location access to fill the coordinates automatically.</small></div>
     </div></section>
     <section class="drrm-form-step" data-step="2"><div class="form-grid"><div class="form-field full-width"><label>Number of household members <b>*</b></label><input class="form-control" name="resident_count" type="number" min="0" value="1" required><small class="field-error" data-error="resident_count"></small></div></div><div class="vulnerability-card"><h3>Vulnerability information</h3><p>Enter the number of household members in each category.</p><div class="form-grid"><div class="form-field"><label>Senior citizens</label><input class="form-control" name="senior_count" type="number" min="0" value="0"></div><div class="form-field"><label>Persons with Disabilities (PWD)</label><input class="form-control" name="pwd_count" type="number" min="0" value="0"></div><div class="form-field"><label>Bedridden residents</label><input class="form-control" name="bedridden_count" type="number" min="0" value="0"></div><div class="form-field"><label>Pregnant residents</label><input class="form-control" name="pregnant_count" type="number" min="0" value="0"></div><div class="form-field"><label>Infants</label><input class="form-control" name="infant_count" type="number" min="0" value="0"></div><div class="form-field"><label>Needs transportation assistance</label><input class="form-control" name="transport_assistance_count" type="number" min="0" value="0"></div></div></div><div class="form-field full-width"><label>Medical / rescue notes</label><textarea class="form-control" name="notes" placeholder="e.g. bedridden resident, oxygen needs, emergency contact, access restrictions"></textarea></div></section>
@@ -865,7 +893,10 @@ function openDrrmHouseholdModal() {
   $("[data-use-location]", form).addEventListener("click", event => { if (!navigator.geolocation) { $("#drrmHouseholdFeedback").textContent = "Location access is not supported by this browser."; return; } event.currentTarget.disabled = true; navigator.geolocation.getCurrentPosition(position => { form.elements.latitude.value = position.coords.latitude.toFixed(6); form.elements.longitude.value = position.coords.longitude.toFixed(6); event.currentTarget.disabled = false; }, () => { $("#drrmHouseholdFeedback").textContent = "Unable to get your location. Please allow location access or enter the coordinates manually."; event.currentTarget.disabled = false; }); });
   form.addEventListener("submit", async event => { event.preventDefault(); if (!validate()) return; const data = Object.fromEntries(new FormData(form)); const payload = { household_number: data.household_number, address: data.address, sitio: data.sitio, latitude: Number(data.latitude), longitude: Number(data.longitude), resident_count: Number(data.resident_count), senior_count: Number(data.senior_count || 0), pwd_count: Number(data.pwd_count || 0), bedridden_count: Number(data.bedridden_count || 0), pregnant_count: Number(data.pregnant_count || 0), infant_count: Number(data.infant_count || 0), transport_assistance_count: Number(data.transport_assistance_count || 0), notes: data.notes || "", members: [] }; const button = $("[data-step-save]", form); button.disabled = true; try { await api("/api/admin/drrm/households", { method: "POST", body: JSON.stringify(payload) }); layer.classList.add("hidden"); toast("DRRM household added."); await render(); } catch (error) { $("#drrmHouseholdFeedback").textContent = error.message || "Unable to save household."; } finally { button.disabled = false; } }); renderStep();
 }
-    case "new-household": openDrrmHouseholdModal(); break;
+    case "new-household":
+      if (!drrmPickedLocation) { window.drrmMapActions?.setMode('select'); toast('Click the map first to select the household location.'); return; }
+      openDrrmHouseholdModal();
+      break;
       break;    case "new-request":
       await createRequest();
       break;
@@ -878,6 +909,28 @@ function openDrrmHouseholdModal() {
     case "request-details":
       await viewRequest(element.dataset.id);
       break;
+    case "claim-request": {
+      const request = pageData.requests.find(item => String(item.id) === String(element.dataset.id));
+      if (!request || !(await confirmAction("Mark request as claimed", "Confirm that this request has been received.", "Mark as Claimed"))) return;
+      await api(`/api/requests/${request.id}/claim`, { method: "PATCH", body: JSON.stringify({}) });
+      toast("Request marked as claimed.");
+      $("#modalLayer").classList.add("hidden");
+      await render();
+      break;
+    }
+    case "archive-request": {
+      const request = pageData.requests.find(item => String(item.id) === String(element.dataset.id));
+      if (!request || !(await confirmAction("Archive request", `Archive ${request.reference_code}? You can restore it later.`, "Archive"))) return;
+      const reason = "Archived by administrator";
+      await api(`/api/requests/${request.id}/archive`, { method: "PATCH", body: JSON.stringify({ reason }) });
+      toast("Request archived."); await render(); break;
+    }
+    case "restore-request": {
+      const request = pageData.requests.find(item => String(item.id) === String(element.dataset.id));
+      if (!request || !(await confirmAction("Restore request", `Restore ${request.reference_code} to the active list?`, "Restore"))) return;
+      await api(`/api/requests/${request.id}/restore`, { method: "PATCH", body: JSON.stringify({}) });
+      toast("Request restored."); await render(); break;
+    }
     case "new-feedback":
       await createFeedback();
       break;
@@ -1246,6 +1299,7 @@ document.addEventListener("click", event => {
   }
 });
 $("#logoutBtn").addEventListener("click", async () => {
+  if (!(await confirmAction("Log out", "Are you sure you want to end your current session?", "Log out"))) return;
   closeMobileNav();
   try {
     const { data } = await api("/auth/logout", { method: "POST", body: JSON.stringify({}) });
@@ -1279,6 +1333,11 @@ $("#forgotLink").addEventListener("click", event => {
   showForgotPasswordForm();
 });
 $("#pageContent").addEventListener("input", event => {
+  if (event.target.id === "requestArchive") {
+    pageData.requestArchive = event.target.value;
+    render().catch(error => toast(error.message || "Unable to load archived requests."));
+    return;
+  }
   if (event.target.id === "requestSearch" || event.target.id === "requestStatus") {
     const query = ($("#requestSearch")?.value || "").toLowerCase();
     const status = $("#requestStatus")?.value || "";
@@ -1294,8 +1353,21 @@ $("#pageContent").addEventListener("input", event => {
     $$("#pageContent tbody tr").forEach(row => row.classList.toggle("hidden", !row.textContent.toLowerCase().includes(query)));
   }
 });
+$("#pageContent").addEventListener("change", event => {
+  if (event.target.id === "requestArchive") {
+    pageData.requestArchive = event.target.value;
+    render().catch(error => toast(error.message || "Unable to load archived requests."));
+  }
+});
 $("#pageContent").addEventListener("submit", async event => {
   const form = event.target;
+  if (form.id === "pickupWindowForm") {
+    event.preventDefault();
+    const feedback = $("#pickupWindowFeedback");
+    try { await api("/api/admin/settings", { method: "PATCH", body: JSON.stringify(Object.fromEntries(new FormData(form))) }); toast("Pickup window saved."); await render(); }
+    catch (error) { feedback.textContent = error.message || "Unable to save pickup window."; }
+    return;
+  }
   if (form.id !== "auditLogFilters") return;
   event.preventDefault();
   const submit = form.querySelector("button[type=submit]");

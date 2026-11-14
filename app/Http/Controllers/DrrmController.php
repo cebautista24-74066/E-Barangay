@@ -63,6 +63,8 @@ public function storeCenter(Request $request): JsonResponse
     {
         $this->admin($request);
         $data = $request->validate(['name' => ['required','string','max:255'], 'address' => ['required','string','max:255'], 'latitude' => ['required','numeric','between:-90,90'], 'longitude' => ['required','numeric','between:-180,180'], 'capacity' => ['nullable','integer','min:1'], 'current_occupants' => ['nullable','integer','min:0'], 'status' => ['nullable','in:Open,Full,Temporarily Closed']]);
+        $data['current_occupants'] = (int) ($data['current_occupants'] ?? 0);
+        $data['status'] = $data['status'] ?? 'Open';
         return response()->json(['evacuation_center' => DrrmEvacuationCenter::create($data)], 201);
     }
 
