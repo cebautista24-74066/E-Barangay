@@ -3,6 +3,9 @@
 namespace Database\Seeders;
 
 use App\Models\BarangayService;
+use App\Models\DrrmEvacuationCenter;
+use App\Models\DrrmHousehold;
+use App\Models\ServiceRequest;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -49,5 +52,46 @@ class DatabaseSeeder extends Seeder
                 [...$service, 'created_by' => $admin->id, 'is_active' => true],
             );
         }
+
+        $resident = User::where('email', 'resident@ebarangay.test')->firstOrFail();
+        $services = BarangayService::orderBy('id')->get();
+        $demoRequests = [
+            ['reference_code' => 'DEMO-PENDING-001', 'service' => $services[0] ?? null, 'status' => 'Pending', 'purpose' => 'Employment requirement.'],
+            ['reference_code' => 'DEMO-PROCESS-002', 'service' => $services[1] ?? $services[0] ?? null, 'status' => 'Processing', 'purpose' => 'Local business registration.'],
+            ['reference_code' => 'DEMO-PICKUP-003', 'service' => $services[0] ?? null, 'status' => 'Ready for Pickup', 'purpose' => 'School requirement.', 'ready_for_pickup_at' => now()->subDay(), 'pickup_deadline' => now()->addDays(2)->endOfDay()],
+            ['reference_code' => 'DEMO-CLAIMED-004', 'service' => $services[2] ?? $services[0] ?? null, 'status' => 'Claimed', 'purpose' => 'Incident documentation.', 'ready_for_pickup_at' => now()->subDays(5), 'pickup_deadline' => now()->subDays(2)->endOfDay()],
+            ['reference_code' => 'DEMO-REJECTED-005', 'service' => $services[3] ?? $services[0] ?? null, 'status' => 'Rejected', 'purpose' => 'Community concern report.'],
+        ];
+        foreach ($demoRequests as $demo) {
+            if (! $demo['service']) continue;
+            $serviceRequest = ServiceRequest::updateOrCreate(
+                ['reference_code' => $demo['reference_code']],
+                [
+                    'user_id' => $resident->id,
+                    'barangay_service_id' => $demo['service']->id,
+                    'purpose' => $demo['purpose'],
+                    'status' => $demo['status'],
+                    'ready_for_pickup_at' => $demo['ready_for_pickup_at'] ?? null,
+                    'pickup_deadline' => $demo['pickup_deadline'] ?? null,
+                ],
+            );
+            $serviceRequest->statusHistory()->updateOrCreate(
+                ['to_status' => $demo['status']],
+                ['changed_by' => $admin->id, 'from_status' => null, 'note' => 'Demo request record.'],
+            );
+        }
+
+        $demoHouseholds = [
+            ['household_number' => 'DEMO-HH-001', 'address' => 'Purok 1, Humayingan', 'sitio' => 'Sitio 1', 'latitude' => 13.9982, 'longitude' => 120.6674, 'resident_count' => 4, 'senior_count' => 1, 'pwd_count' => 0, 'notes' => 'Demo priority household.'],
+            ['household_number' => 'DEMO-HH-002', 'address' => 'Purok 3, Humayingan', 'sitio' => 'Sitio 3', 'latitude' => 13.9963, 'longitude' => 120.6662, 'resident_count' => 3, 'senior_count' => 0, 'pwd_count' => 1, 'notes' => 'Demo household record.'],
+        ];
+        foreach ($demoHouseholds as $attributes) {
+            $household = DrrmHousehold::updateOrCreate(['household_number' => $attributes['household_number']], [...$attributes, 'location_type' => 'House', 'is_active' => true]);
+            $household->recalculatePriority();
+        }
+        DrrmEvacuationCenter::updateOrCreate(
+            ['name' => 'DEMO Humayingan Covered Court'],
+            ['address' => 'Purok 2, Humayingan', 'latitude' => 13.9965, 'longitude' => 120.6732, 'capacity' => 70, 'current_occupants' => 12, 'status' => 'Open', 'is_active' => true],
+        );
     }
 }
