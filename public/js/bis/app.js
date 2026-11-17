@@ -412,6 +412,7 @@ function servicesPage() {
   const admin = mode === "admin";
   const cards = services.map(service => `<article class="service-card">
     <span class="stat-icon">${uiIcon("services")}</span><h3>${escapeHtml(service.name)}</h3><p>${escapeHtml(service.description)}</p>
+    <p class="service-fee"><b>Service fee</b><br>${Number(service.service_fee || 0) === 0 ? "Free" : `₱${Number(service.service_fee).toFixed(2)}`}</p>
     ${service.requirements ? `<p><b>Requirements</b><br>${escapeHtml(service.requirements).replace(/\n/g, "<br>")}</p>` : ""}
     ${service.instructions ? `<p><b>Procedure</b><br>${escapeHtml(service.instructions).replace(/\n/g, "<br>")}</p>` : ""}
     ${admin
@@ -705,10 +706,13 @@ function openModal(title, subtitle, fields, submitText, onSubmit) {
       control = `<select class="form-control" name="${escapeHtml(field.name)}" ${required}>${field.options.map(option => `<option value="${escapeHtml(option.value)}" ${String(option.value) === String(field.value ?? field.options[0]?.value) ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}</select>`;
     } else if (field.type === "textarea") {
       control = `<textarea class="form-control" name="${escapeHtml(field.name)}" placeholder="${escapeHtml(field.placeholder || "")}" ${required}>${value}</textarea>`;
+    } else if (field.type === "dynamic-list") {
+      const items = String(field.value || "").split(/\r?\n/).map(item => item.trim()).filter(Boolean);
+      control = `<div class="dynamic-list" data-list-name="${escapeHtml(field.name)}"><input type="hidden" name="${escapeHtml(field.name)}" value="${escapeHtml(items.join("\n"))}"><div class="dynamic-list-items">${items.map(item => `<div class="dynamic-list-row"><input class="form-control dynamic-list-input" type="text" value="${escapeHtml(item)}" placeholder="${escapeHtml(field.placeholder || "")}"><button type="button" class="danger-btn sm dynamic-list-remove">Remove</button></div>`).join("")}</div><button type="button" class="secondary-btn sm dynamic-list-add">+ Add ${field.name === "requirements" ? "requirement" : "step"}</button></div>`;
     } else if (field.type === "file") {
       control = `<input class="form-control" name="${escapeHtml(field.name)}" type="file" accept="${escapeHtml(field.accept || "")}" ${field.multiple ? "multiple" : ""} ${required}>`;
     } else {
-      control = `<input class="form-control" name="${escapeHtml(field.name)}" type="${escapeHtml(field.type || "text")}" value="${value}" placeholder="${escapeHtml(field.placeholder || "")}" ${required} ${field.maxLength ? `maxlength="${field.maxLength}"` : ""}>`;
+      control = `<input class="form-control" name="${escapeHtml(field.name)}" type="${escapeHtml(field.type || "text")}" value="${value}" placeholder="${escapeHtml(field.placeholder || "")}" ${required} ${field.maxLength ? `maxlength="${field.maxLength}"` : ""} ${field.min !== undefined ? `min="${escapeHtml(field.min)}"` : ""} ${field.step !== undefined ? `step="${escapeHtml(field.step)}"` : ""}>`;
     }
     return `<div class="form-field ${field.full ? "full-width" : ""}" data-field-name="${escapeHtml(field.name)}"><label>${escapeHtml(field.label)}</label>${control}${field.help ? `<small>${escapeHtml(field.help)}</small>` : ""}</div>`;
   }).join("");
@@ -730,6 +734,19 @@ function openModal(title, subtitle, fields, submitText, onSubmit) {
     } finally {
       submit.disabled = false;
     }
+  });
+  layer.querySelectorAll(".dynamic-list").forEach(list => {
+    const items = list.querySelector(".dynamic-list-items");
+    const hidden = list.querySelector('input[type="hidden"]');
+    const sync = () => { hidden.value = [...items.querySelectorAll(".dynamic-list-input")].map(input => input.value.trim()).filter(Boolean).join("\n"); };
+    list.querySelector(".dynamic-list-add").addEventListener("click", () => {
+      const row = document.createElement("div");
+      row.className = "dynamic-list-row";
+      row.innerHTML = `<input class="form-control dynamic-list-input" type="text" placeholder="Enter item"><button type="button" class="danger-btn sm dynamic-list-remove">Remove</button>`;
+      items.appendChild(row); row.querySelector(".dynamic-list-input").focus();
+    });
+    list.addEventListener("input", sync);
+    list.addEventListener("click", event => { if (event.target.closest(".dynamic-list-remove")) { event.target.closest(".dynamic-list-row").remove(); sync(); } });
   });
 }
 
@@ -765,9 +782,10 @@ function confirmAction(title, message, confirmLabel = "Confirm") {
 function serviceFields(service = {}) {
   return [
     { name: "name", label: "Service name", value: service.name, required: true, maxLength: 255, full: true },
-    { name: "description", label: "Description", type: "textarea", value: service.description, required: true, full: true },
-    { name: "requirements", label: "Requirements", type: "textarea", value: service.requirements, placeholder: "List each official requirement on a separate line.", full: true },
-    { name: "instructions", label: "Procedure / instructions", type: "textarea", value: service.instructions, full: true },
+    { name: "description", label: "Short description", type: "textarea", value: service.description, required: true, full: true },
+    { name: "service_fee", label: "Service fee", type: "number", value: service.service_fee ?? 0, min: "0", step: "0.01", placeholder: "0.00", help: "Enter 0 if the service is free." },
+    { name: "requirements", label: "Requirements", type: "dynamic-list", value: service.requirements, placeholder: "e.g. Valid ID", full: true },
+    { name: "instructions", label: "Procedure", type: "dynamic-list", value: service.instructions, placeholder: "e.g. Submit requirements", full: true },
     { name: "is_active", label: "Publication status", type: "select", value: service.is_active ? "1" : "0", options: [{ value: "1", label: "Active" }, { value: "0", label: "Inactive" }] }
   ];
 }
@@ -797,6 +815,47 @@ async function createRequest(serviceId = null) {
     toast(`Request submitted. Reference: ${data.request.reference_code}`);
     go("My Requests");
   });
+  const serviceSelect = document.querySelector('#activeModal [name="service_id"]');
+  if (serviceSelect) {
+    const info = document.createElement("div");
+    info.className = "request-service-info";
+    serviceSelect.closest(".form-field")?.after(info);
+    const updateInfo = () => {
+      const service = available.find(item => String(item.id) === String(serviceSelect.value));
+      if (!service) { info.innerHTML = ""; return; }
+      const requirements = String(service.requirements || "").split(/\r?\n/).map(item => item.trim()).filter(Boolean);
+      const procedure = String(service.instructions || "").split(/\r?\n/).map(item => item.trim()).filter(Boolean);
+      info.innerHTML = `<div class="request-service-summary"><div><span>Service fee</span><b>${Number(service.service_fee || 0) === 0 ? "Free" : `₱${Number(service.service_fee).toFixed(2)}`}</b></div><div><span>About this service</span><p>${escapeHtml(service.description || "")}</p></div>${requirements.length ? `<div><span>Requirements</span><ul>${requirements.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>` : ""}${procedure.length ? `<div><span>Procedure</span><ol>${procedure.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ol></div>` : ""}</div>`;
+    };
+    serviceSelect.addEventListener("change", updateInfo);
+    updateInfo();
+  }
+  const fileInput = document.querySelector('#activeModal input[name="documents[]"]');
+  if (fileInput) {
+    const fileList = document.createElement("div");
+    fileList.className = "request-upload-list";
+    fileInput.after(fileList);
+    const renderFiles = () => {
+      fileList.innerHTML = [...fileInput.files].map((file, index) => {
+        const image = file.type.startsWith("image/");
+        const preview = image ? `<img src="${URL.createObjectURL(file)}" alt="" class="request-upload-thumb">` : `<span class="request-upload-file-icon">FILE</span>`;
+        return `<div class="request-upload-item">${preview}<span class="request-upload-name">${escapeHtml(file.name)}<small>${(file.size / 1024 / 1024).toFixed(2)} MB</small></span><button type="button" class="request-upload-remove" data-file-index="${index}" aria-label="Remove ${escapeHtml(file.name)}">×</button></div>`;
+      }).join("");
+      fileList.querySelectorAll(".request-upload-thumb").forEach(image => image.addEventListener("click", () => openImagePreview(image.src, image.alt || "Uploaded document")));
+    };
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files.length > 5) { toast("You can upload up to 5 files."); const transfer = new DataTransfer(); [...fileInput.files].slice(0, 5).forEach(file => transfer.items.add(file)); fileInput.files = transfer.files; }
+      renderFiles();
+    });
+    fileList.addEventListener("click", event => {
+      const remove = event.target.closest(".request-upload-remove");
+      if (!remove) return;
+      const transfer = new DataTransfer();
+      [...fileInput.files].forEach((file, index) => { if (index !== Number(remove.dataset.fileIndex)) transfer.items.add(file); });
+      fileInput.files = transfer.files;
+      renderFiles();
+    });
+  }
 }
 
 function requestDocumentMarkup(request) {

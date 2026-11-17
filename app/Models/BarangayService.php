@@ -12,6 +12,7 @@ class BarangayService extends Model
         'created_by',
         'name',
         'description',
+        'service_fee',
         'requirements',
         'instructions',
         'is_active',
@@ -26,7 +27,7 @@ class BarangayService extends Model
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean', 'template_layout' => 'array'];
+        return ['is_active' => 'boolean', 'service_fee' => 'decimal:2', 'template_layout' => 'array'];
     }
 
     public function author(): BelongsTo

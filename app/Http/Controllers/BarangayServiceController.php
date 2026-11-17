@@ -81,6 +81,7 @@ public function destroy(Request $request, BarangayService $service): JsonRespons
         return Validator::make($request->all(), [
             'name' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string', 'max:2000'],
+            'service_fee' => ['required', 'numeric', 'min:0', 'max:99999999.99'],
             'requirements' => ['nullable', 'string', 'max:5000'],
             'instructions' => ['nullable', 'string', 'max:5000'],
             'is_active' => ['required', 'boolean'],
