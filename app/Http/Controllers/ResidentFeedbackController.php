@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ResidentFeedback;
+use App\Notifications\ResidentFeedbackStatusChanged;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -49,6 +50,8 @@ class ResidentFeedbackController extends Controller
         ])->validate();
 
         $feedback->update($data);
+        $feedback->load('resident:id,name,email');
+        $feedback->resident?->notify(new ResidentFeedbackStatusChanged($feedback));
 
         return response()->json(['feedback' => $feedback->fresh(['resident:id,name,email'])]);
     }

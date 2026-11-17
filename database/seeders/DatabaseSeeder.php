@@ -40,8 +40,6 @@ class DatabaseSeeder extends Seeder
         );$defaultServices = [
             ['name' => 'Barangay Clearances', 'description' => 'Issuance of barangay clearance, certificate of indigency, or certificate of residency for residents official transactions.', 'requirements' => 'Valid government-issued ID; completed request details.', 'instructions' => 'Submit the request online and wait for the barangay office confirmation.'],
             ['name' => 'Business Permits', 'description' => 'Application and renewal of barangay business permits for local establishments and entrepreneurs.', 'requirements' => 'Valid ID; business registration documents; proof of address.', 'instructions' => 'Submit the business details and supporting documents for review.'],
-            ['name' => 'Blotters', 'description' => 'Recording of incidents, complaints, or community disputes reported to the barangay for documentation and resolution.', 'requirements' => 'Valid ID; incident details; supporting evidence if available.', 'instructions' => 'Describe the incident accurately and provide the date, location, and involved parties.'],
-            ['name' => 'Complaints', 'description' => 'Formal filing of grievances or issues by residents for mediation and barangay action.', 'requirements' => 'Valid ID; clear explanation of the concern; supporting documents if available.', 'instructions' => 'Submit the concern and wait for the barangay office to contact you for mediation or action.'],
             ['name' => 'Special Permits', 'description' => 'Application for special event or activity permits within the barangay, such as public gatherings, fiestas, or road closures.', 'requirements' => 'Valid ID; event details; venue or route plan; schedule of activity.', 'instructions' => 'Submit the event information early for review and approval.'],
         ];
 
@@ -59,8 +57,8 @@ class DatabaseSeeder extends Seeder
             ['reference_code' => 'DEMO-PENDING-001', 'service' => $services[0] ?? null, 'status' => 'Pending', 'purpose' => 'Employment requirement.'],
             ['reference_code' => 'DEMO-PROCESS-002', 'service' => $services[1] ?? $services[0] ?? null, 'status' => 'Processing', 'purpose' => 'Local business registration.'],
             ['reference_code' => 'DEMO-PICKUP-003', 'service' => $services[0] ?? null, 'status' => 'Ready for Pickup', 'purpose' => 'School requirement.', 'ready_for_pickup_at' => now()->subDay(), 'pickup_deadline' => now()->addDays(2)->endOfDay()],
-            ['reference_code' => 'DEMO-CLAIMED-004', 'service' => $services[2] ?? $services[0] ?? null, 'status' => 'Claimed', 'purpose' => 'Incident documentation.', 'ready_for_pickup_at' => now()->subDays(5), 'pickup_deadline' => now()->subDays(2)->endOfDay()],
-            ['reference_code' => 'DEMO-REJECTED-005', 'service' => $services[3] ?? $services[0] ?? null, 'status' => 'Rejected', 'purpose' => 'Community concern report.'],
+            ['reference_code' => 'DEMO-CLAIMED-004', 'service' => $services[2] ?? $services[0] ?? null, 'status' => 'Claimed', 'purpose' => 'Special permit documentation.', 'ready_for_pickup_at' => now()->subDays(5), 'pickup_deadline' => now()->subDays(2)->endOfDay()],
+            ['reference_code' => 'DEMO-REJECTED-005', 'service' => $services[0] ?? null, 'status' => 'Rejected', 'purpose' => 'Incomplete clearance requirements.'],
         ];
         foreach ($demoRequests as $demo) {
             if (! $demo['service']) continue;

@@ -71,15 +71,9 @@ public function destroy(Request $request, BarangayService $service): JsonRespons
     {
         $this->authorizeAdministrator($request);
 
-        if ($service->requests()->exists()) {
-            return response()->json([
-                'message' => 'This service has request history. Deactivate it instead of deleting it.',
-            ], 422);
-        }
+        $service->update(['is_active' => false]);
 
-        $service->delete();
-
-        return response()->json(['message' => 'Service deleted.']);
+        return response()->json(['message' => 'Service archived. Existing requests were preserved.', 'service' => $service->fresh()]);
     }
 
     private function validated(Request $request): array

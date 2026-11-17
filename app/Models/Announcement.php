@@ -16,6 +16,9 @@ class Announcement extends Model
         'published_at',
         'event_date',
         'event_time',
+        'event_location',
+        'event_organizer',
+        'event_contact',
     ];
 
     protected function casts(): array

@@ -71,6 +71,9 @@ class AnnouncementController extends Controller
             'published_at' => ['nullable', 'date'],
             'event_date' => ['nullable', 'date'],
             'event_time' => ['nullable', 'date_format:H:i'],
+            'event_location' => ['nullable', 'string', 'max:255'],
+            'event_organizer' => ['nullable', 'string', 'max:255'],
+            'event_contact' => ['nullable', 'string', 'max:255'],
         ])->validate();
     }
 

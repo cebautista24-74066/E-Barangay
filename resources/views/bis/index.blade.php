@@ -10,7 +10,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/bis/style.css?v={{ filemtime(public_path('css/bis/style.css')) }}" />
   <link rel="stylesheet" href="/css/bis/requirements.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
   <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
@@ -82,7 +81,7 @@
             <svg viewBox="0 0 24 24" fill="none"><path d="M6 3.5h12a2 2 0 0 1 2 2v14a1 1 0 0 1-1.5.9l-2-1.1H6a2 2 0 0 1-2-2v-12a2 2 0 0 1 2-1.8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 8h8M8 11.5h8M8 15h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
           </span>
           <span class="service-index">03 / RECORDS</span>
-          <h3>Blotters</h3><p>Recording of incidents, complaints, or community disputes reported to the barangay for documentation and resolution.</p>
+          <h3 class="removed-service">Blotters</h3><p>Recording of incidents, complaints, or community disputes reported to the barangay for documentation and resolution.</p>
           <a class="public-login-trigger-link" href="#login">Access services <span>→</span></a>
         </article>
         <article class="public-service-card">
@@ -90,7 +89,7 @@
             <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="16.5" r="1.2" fill="currentColor"/></svg>
           </span>
           <span class="service-index">04 / CONCERNS</span>
-          <h3>Complaints</h3><p>Formal filing of grievances or issues by residents for mediation and barangay action.</p>
+          <h3 class="removed-service">Complaints</h3><p>Formal filing of grievances or issues by residents for mediation and barangay action.</p>
           <a class="public-login-trigger-link" href="#login">Access services <span>→</span></a>
         </article>
         <article class="public-service-card">
@@ -160,16 +159,19 @@
       <label for="registerEmail">Email Address</label>
       <div class="input-wrap"><span class="input-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span><input id="registerEmail" name="email" type="email" autocomplete="email" placeholder="Enter your email address" maxlength="255" required></div>
       <label for="registerPassword">Password</label>
-      <div class="input-wrap"><span class="input-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><input id="registerPassword" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" minlength="8" required></div>
+      <div class="input-wrap"><span class="input-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><input id="registerPassword" name="password" type="password" autocomplete="new-password" placeholder="At least 8 chars, upper/lowercase &amp; number" minlength="8" required></div>
       <label for="registerPasswordConfirmation">Confirm Password</label>
       <div class="input-wrap"><span class="input-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><input id="registerPasswordConfirmation" name="password_confirmation" type="password" autocomplete="new-password" placeholder="Enter your password again" minlength="8" required></div>
+      <label for="registerProof">Government ID / Proof of Residency</label>
+      <div class="input-wrap"><input id="registerProof" name="proof_image" type="file" accept="image/jpeg,image/png" required></div>
+      <small class="muted">JPG or PNG only, maximum 5 MB. Your application must be approved by an administrator.</small>
       <button class="primary-btn full" type="submit">Create Account <span>→</span></button>
       <p id="registerFeedback" class="auth-feedback" role="alert" aria-live="polite"></p>
       <p class="signup-line showcase-signup">Already registered? <a href="#" id="loginAgainLink">Log in</a></p>
       <button class="back-to-landing auth-back-home" type="button">← Back to home</button>
     </form>
     <form id="forgotPasswordForm" class="glass login-card showcase-login-card hidden">
-      <h2>Forgot password?</h2><p class="muted">We'll use the same email address you entered on the login screen. To use your account's registered email, go back and enter it there first.</p>
+      <h2>Forgot password?</h2><p class="muted">Enter the email address registered to your account and we’ll send you a secure password reset link.</p>
       <label for="forgotEmail">Email Address</label>
       <div class="input-wrap"><span>•</span><input id="forgotEmail" name="email" type="email" autocomplete="email" placeholder="Return to login and enter your account email" maxlength="255" readonly required></div>
       <button class="primary-btn full" type="submit" disabled>Send Reset Link <span>→</span></button>
@@ -211,7 +213,13 @@
   </div>
   <div id="toast" class="toast"></div>
   <div id="modalLayer" class="modal-layer hidden"></div>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.18.0/dist/maplibre-gl.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/maplibre-gl@6.18.0/dist/maplibre-gl.js"></script>
+  <script>
+    window.eBarangayConfig = { mapTilerKey: @json(config('services.maptiler.key')) };
+  </script>
   <script src="/js/bis/app.js?v={{ filemtime(public_path('js/bis/app.js')) }}"></script>
 </body>
 </html>

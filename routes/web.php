@@ -18,8 +18,11 @@ Route::get('/', function () {
     return view('bis.index');
 });
 
+Route::post('/auth/register', [AuthController::class, 'register'])
+    ->middleware('throttle:3,60')
+    ->name('auth.register');
+
 Route::middleware('throttle:6,1')->group(function () {
-    Route::post('/auth/register', [AuthController::class, 'register'])->name('auth.register');
     Route::post('/auth/login', [AuthController::class, 'login'])->name('auth.login');
     Route::post('/auth/forgot-password', [AuthController::class, 'sendPasswordResetLink'])->name('password.email');
     Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])->name('password.update');
@@ -45,6 +48,8 @@ Route::middleware(['auth', EnsureActiveAccount::class, 'admin.audit'])->group(fu
     Route::get('/api/residents', [AdminResidentController::class, 'index']);
     Route::post('/api/residents', [AdminResidentController::class, 'store']);
     Route::patch('/api/residents/{user}', [AdminResidentController::class, 'update']);
+    Route::patch('/api/residents/{user}/verification', [AdminResidentController::class, 'reviewVerification']);
+    Route::get('/api/residents/{user}/verification-proof', [AdminResidentController::class, 'verificationProof']);
     Route::delete('/api/residents/{user}', [AdminResidentController::class, 'destroy']);
     Route::get('/api/admin/users/admins', [AdminResidentController::class, 'admins']);
     Route::get('/api/admin/settings', [BarangaySettingController::class, 'show']);
@@ -92,4 +97,6 @@ Route::middleware(['auth', EnsureActiveAccount::class, 'admin.audit'])->group(fu
     Route::delete('/api/admin/drrm/households/{household}', [DrrmController::class, 'destroyHousehold']);
     Route::patch('/api/admin/drrm/evacuation-centers/{center}', [DrrmController::class, 'updateCenter']);
     Route::delete('/api/admin/drrm/evacuation-centers/{center}', [DrrmController::class, 'destroyCenter']);
+    Route::post('/api/admin/drrm/evacuation-centers/{center}/check-in', [DrrmController::class, 'checkInHousehold']);
+    Route::post('/api/admin/drrm/evacuation-records/{record}/check-out', [DrrmController::class, 'checkOutHousehold']);
 });

@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Storage;
 
 class AdminResidentController extends Controller
 {
@@ -18,7 +19,7 @@ class AdminResidentController extends Controller
             'residents' => User::query()
                 ->where('role', 'Resident')
                 ->orderBy('id')
-                ->get(['id', 'name', 'email', 'role', 'is_active', 'created_at']),
+                ->get(['id', 'name', 'email', 'role', 'is_active', 'verification_status', 'verification_rejection_reason', 'verification_reviewed_at', 'created_at']),
         ]);
     }
 
@@ -37,13 +38,45 @@ class AdminResidentController extends Controller
             'email' => strtolower(trim($data['email'])),
             'password' => $data['password'],
             'is_active' => true,
+            'verification_status' => 'approved',
         ]);
         $resident->role = 'Resident';
         $resident->save();
 
         return response()->json([
-            'resident' => $resident->only(['id', 'name', 'email', 'role', 'is_active']),
+            'resident' => $resident->only(['id', 'name', 'email', 'role', 'is_active', 'verification_status']),
         ], 201);
+    }
+
+    public function reviewVerification(Request $request, User $user): JsonResponse
+    {
+        $this->authorizeAdministrator($request);
+        abort_unless($user->role === 'Resident', 404);
+
+        $data = Validator::make($request->all(), [
+            'action' => ['required', 'in:approve,reject'],
+            'rejection_reason' => ['required_if:action,reject', 'nullable', 'string', 'max:1000'],
+        ])->validate();
+
+        $user->update([
+            'verification_status' => $data['action'] === 'approve' ? 'approved' : 'rejected',
+            'is_active' => $data['action'] === 'approve',
+            'verification_rejection_reason' => $data['action'] === 'reject' ? trim($data['rejection_reason']) : null,
+            'verification_reviewed_by' => $request->user()->id,
+            'verification_reviewed_at' => now(),
+        ]);
+
+        return response()->json([
+            'resident' => $user->fresh()->only(['id', 'name', 'email', 'role', 'is_active', 'verification_status', 'verification_rejection_reason']),
+        ]);
+    }
+
+    public function verificationProof(Request $request, User $user)
+    {
+        $this->authorizeAdministrator($request);
+        abort_unless($user->role === 'Resident' && $user->verification_proof_path, 404);
+
+        return Storage::disk('local')->response($user->verification_proof_path);
     }
     public function update(Request $request, User $user): JsonResponse
     {

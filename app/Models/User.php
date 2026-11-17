@@ -23,6 +23,11 @@ class User extends Authenticatable
         'email',
         'password',
         'is_active',
+        'verification_status',
+        'verification_proof_path',
+        'verification_rejection_reason',
+        'verification_reviewed_by',
+        'verification_reviewed_at',
     ];
 
     /**
@@ -46,6 +51,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'verification_reviewed_at' => 'datetime',
         ];
     }
 }

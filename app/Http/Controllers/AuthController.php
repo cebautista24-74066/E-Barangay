@@ -9,8 +9,10 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password as PasswordRule;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class AuthController extends Controller
@@ -25,7 +27,13 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => [
+                'required',
+                'string',
+                'confirmed',
+                PasswordRule::min(8)->mixedCase()->numbers(),
+            'proof_image' => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:5120'],
+            ],
         ]);
 
         if ($validator->fails()) {
@@ -35,15 +43,21 @@ class AuthController extends Controller
             ], 422);
         }
 
-        $user = new User($validator->validated());
+        $data = $validator->validated();
+        $proofPath = $request->file('proof_image')->store('resident-verification', 'local');
+        $user = new User([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => $data['password'],
+            'is_active' => false,
+            'verification_status' => 'pending',
+            'verification_proof_path' => $proofPath,
+        ]);
         $user->role = 'Resident';
         $user->save();
-        Auth::login($user);
-        $request->session()->regenerate();
 
         return response()->json([
-            'message' => 'Your resident account has been created.',
-            'user' => $this->userPayload($user),
+            'message' => 'Your account application was submitted and is pending admin approval.',
             'csrf_token' => csrf_token(),
         ], 201);
     }
@@ -69,6 +83,17 @@ class AuthController extends Controller
         }
 
         $credentials = $validator->validated();
+
+        $account = User::where('email', $credentials['email'])->first();
+        if ($account && $account->verification_status === 'pending') {
+            return response()->json(['message' => 'Your account is still pending admin approval.'], 403);
+        }
+        if ($account && $account->verification_status === 'rejected') {
+            return response()->json([
+                'message' => 'Your account application was rejected.',
+                'rejection_reason' => $account->verification_rejection_reason,
+            ], 403);
+        }
 
         if (! Auth::attempt([
             'email' => $credentials['email'],
@@ -116,6 +141,8 @@ class AuthController extends Controller
         ])->validate();
         abort_unless(Hash::check($data['current_password'], $request->user()->password), 422, 'The current password is incorrect.');
         $request->user()->update(['password' => $data['password']]);
+        Auth::logoutOtherDevices($data['password']);
+        $request->session()->regenerate();
         return response()->json(['message' => 'Password changed successfully.']);
     }
     public function sendPasswordResetLink(Request $request): JsonResponse
@@ -247,6 +274,7 @@ class AuthController extends Controller
             'name' => $user->name,
             'email' => $user->email,
             'role' => $user->role,
+            'verification_status' => $user->verification_status,
         ];
     }
 }

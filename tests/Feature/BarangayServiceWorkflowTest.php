@@ -7,6 +7,7 @@ use App\Models\ResidentFeedback;
 use App\Models\ServiceRequest;
 use App\Models\User;
 use App\Notifications\ServiceRequestStatusChanged;
+use App\Notifications\ResidentFeedbackStatusChanged;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
@@ -143,6 +144,7 @@ class BarangayServiceWorkflowTest extends TestCase
 
     public function test_residents_can_send_private_feedback_and_only_administrators_can_manage_it(): void
     {
+        Notification::fake();
         $resident = User::factory()->create();
         $administrator = User::factory()->create(['role' => 'Administrator']);
 
@@ -170,6 +172,8 @@ class BarangayServiceWorkflowTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('feedback.status', 'Resolved');
+
+        Notification::assertSentTo($resident, ResidentFeedbackStatusChanged::class);
     }
 
     public function test_reports_and_csv_export_are_administrator_only(): void
@@ -228,6 +232,32 @@ class BarangayServiceWorkflowTest extends TestCase
             ->assertJsonPath('message', 'This account is inactive. Please contact the barangay office for assistance.');
 
         $this->assertGuest();
+    }
+
+    public function test_administrator_can_archive_a_service_with_existing_requests_and_resident_cannot_see_it(): void
+    {
+        $administrator = User::factory()->create(['role' => 'Administrator']);
+        $resident = User::factory()->create();
+        $service = $this->createService($administrator);
+        $serviceRequest = ServiceRequest::create([
+            'reference_code' => 'BRG-20261116-ARCHIVE01',
+            'user_id' => $resident->id,
+            'barangay_service_id' => $service->id,
+            'purpose' => 'Ongoing request',
+            'status' => 'Processing',
+        ]);
+
+        $this->actingAs($administrator)
+            ->deleteJson('/api/services/'.$service->id)
+            ->assertOk()
+            ->assertJsonPath('message', 'Service archived. Existing requests were preserved.')
+            ->assertJsonPath('service.is_active', false);
+
+        $this->assertDatabaseHas('barangay_services', ['id' => $service->id, 'is_active' => false]);
+        $this->assertDatabaseHas('service_requests', ['id' => $serviceRequest->id, 'barangay_service_id' => $service->id, 'status' => 'Processing']);
+
+        $this->actingAs($resident)->getJson('/api/services')->assertOk()->assertJsonMissing(['id' => $service->id]);
+        $this->actingAs($administrator)->getJson('/api/services')->assertOk()->assertJsonPath('services.0.id', $service->id);
     }
 
     private function createService(User $administrator): BarangayService

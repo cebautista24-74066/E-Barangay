@@ -82,6 +82,11 @@ function uiIcon(name) {
     announcement: '<path d="m4 14 11-5v10L4 14Z"/><path d="M15 9h3a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2h-3M7 15v5"/>',
     feedback: '<path d="M4 5h16v11H8l-4 4V5Z"/><path d="M8 9h8M8 12h5"/>',
     events: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16M8 14h.01M12 14h.01M16 14h.01"/>',
+    calendar: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16M8 14h.01M12 14h.01M16 14h.01"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    pin: '<path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>',
+    users: '<path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM17 3.1a4 4 0 0 1 0 7.8M21 21v-2a4 4 0 0 0-3-3.9"/>',
+    phone: '<path d="M5 4h3l2 5-2 1.5a13 13 0 0 0 5.5 5.5L15 14l5 2v3a1 1 0 0 1-1 1C10.7 20 4 13.3 4 5a1 1 0 0 1 1-1Z"/>',
     reports: '<path d="M5 20V10M12 20V4M19 20v-7"/>',
     map: '<path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z"/><path d="M9 3v15M15 6v15"/>',
     bell: '<path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/>',
@@ -143,13 +148,14 @@ async function submitAuthForm(form, endpoint, feedbackSelector) {
   const button = form.querySelector('button[type="submit"]');
   button.disabled = true;
   $(feedbackSelector).textContent = "";
-  const payload = Object.fromEntries(new FormData(form));
+  const formData = new FormData(form);
+  const payload = form.id === "registerForm" ? formData : Object.fromEntries(formData);
   if (form.id === "loginForm") payload.remember = Boolean(payload.remember);
 
   try {
     const { data } = await api(endpoint, {
       method: "POST",
-      body: JSON.stringify(payload)
+      body: payload instanceof FormData ? payload : JSON.stringify(payload)
     });
     updateCsrfToken(data.csrf_token);
     form.reset();
@@ -194,7 +200,8 @@ function showForgotPasswordForm() {
   $("#forgotPasswordForm").classList.remove("hidden");
   const email = $("#loginName").value.trim();
   $("#forgotEmail").value = email;
-  $("#forgotPasswordForm").querySelector('[type="submit"]').disabled = !email;
+  $("#forgotEmail").removeAttribute("readonly");
+  $("#forgotPasswordForm").querySelector('[type="submit"]').disabled = false;
   $("#forgotFeedback").textContent = "";
   $("#forgotFeedback").classList.remove("success");
   $("#forgotEmail").focus();
@@ -226,7 +233,14 @@ function applyTheme() {
 function toggleTheme() {
   darkMode = !darkMode;
   store.set("bis_theme", darkMode ? "dark" : "light");
+  document.body.classList.remove("theme-switching");
+  void document.body.offsetWidth;
+  document.body.classList.add("theme-switching");
   applyTheme();
+  window.clearTimeout(window.themeSwitchTimer);
+  window.themeSwitchTimer = window.setTimeout(() => {
+    document.body.classList.remove("theme-switching");
+  }, 520);
 }
 
 async function restoreSession() {
@@ -322,6 +336,7 @@ function announcementMarkup(announcement, admin = false) {
     <div class="announcement-thumb">${uiIcon(announcement.category === "Community" ? "user" : announcement.category === "System" ? "settings" : "announcement")}</div>
     <div><b>${escapeHtml(announcement.title)}</b><small>${escapeHtml(announcement.body)}</small><small>${escapeHtml(date)} · ${escapeHtml(announcement.category)}${announcement.is_published ? "" : " · Draft"}</small></div>
     ${announcement.category === "Event" && (announcement.event_date || announcement.event_time) ? `<small class="event-schedule">${announcement.event_date ? escapeHtml(announcement.event_date) : ""}${announcement.event_date && announcement.event_time ? " · " : ""}${announcement.event_time ? escapeHtml(String(announcement.event_time).slice(0, 5)) : ""}</small>` : ""}\n    ${admin ? `<div class="table-actions">${button("Edit", "edit-announcement", "secondary-btn sm", `data-id="${announcement.id}"`)}${button("Delete", "delete-announcement", "secondary-btn sm", `data-id="${announcement.id}"`)}</div>` : ""}
+    ${announcement.category === "Event" && !admin ? `<div class="table-actions">${button("View details", "event-details", "primary-btn sm", `data-id="${announcement.id}"`)}</div>` : ""}
   </article>`;
 }
 
@@ -393,7 +408,7 @@ function profilePage() {
 }
 
 function servicesPage() {
-  const services = pageData.services || [];
+  const services = (pageData.services || []).filter(service => service.is_active);
   const admin = mode === "admin";
   const cards = services.map(service => `<article class="service-card">
     <span class="stat-icon">${uiIcon("services")}</span><h3>${escapeHtml(service.name)}</h3><p>${escapeHtml(service.description)}</p>
@@ -419,7 +434,7 @@ function requestsPage(admin = false) {
   </tr>`).join("");
   const statusOptions = [`<option value="">All statuses</option>`, ...requestStatuses.map(status => `<option>${status}</option>`)].join("");
   return `${heading(admin ? "Manage Requests" : "My Requests", admin ? "Review submissions and record request status updates." : "Track the status and history of your requests.", admin ? "" : button("+ New Request", "new-request"))}
-    <section class="panel"><div class="filters"><input id="requestSearch" placeholder="Search reference, resident, or service..."><select id="requestStatus">${statusOptions}</select>${admin ? `<select id="requestArchive"><option value="active">Active Requests</option><option value="archived">Archived Requests</option><option value="all">All Requests</option></select>` : ""}</div>
+    <section class="panel"><div class="filters"><input id="requestSearch" placeholder="Search reference, resident, or service..."><select id="requestStatus">${statusOptions}</select>${admin ? `<select id="requestArchive"><option value="active" ${pageData.requestArchive === "active" || !pageData.requestArchive ? "selected" : ""}>Active Requests</option><option value="archived" ${pageData.requestArchive === "archived" ? "selected" : ""}>Archived Requests</option><option value="all" ${pageData.requestArchive === "all" ? "selected" : ""}>All Requests</option></select>` : ""}</div>
     <div class="table-wrap"><table><thead><tr><th>Reference</th>${admin ? "<th>Resident</th>" : ""}<th>Service</th><th>Date Submitted</th><th>Status</th><th>Pickup / Details</th></tr></thead><tbody>${rows}</tbody></table></div>
     ${requests.length ? "" : emptyState("No requests yet", "Submitted service requests and their status history will appear here.")}</section>`;
 }
@@ -437,26 +452,38 @@ function eventsPage() {
     <section class="panel"><div class="announcement-list">${events.map(item => announcementMarkup(item, mode === "admin")).join("") || emptyState("No upcoming events", "Published event announcements will appear here.")}</div></section>`;
 }
 
+function viewEventDetails(id) {
+  const event = (pageData.announcements || []).find(item => String(item.id) === String(id) && item.category === "Event");
+  if (!event) throw new Error("The selected event could not be found.");
+  const date = event.event_date ? new Date(`${event.event_date}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : "Date to be announced";
+  const time = event.event_time ? new Date(`1970-01-01T${String(event.event_time).slice(0, 5)}`).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Time to be announced";
+  const detail = (label, value, icon) => `<div class="event-detail-item"><span class="event-detail-icon">${uiIcon(icon)}</span><div><small>${label}</small><b>${escapeHtml(value || "To be announced")}</b></div></div>`;
+  const content = `<div class="event-detail-view"><div class="event-detail-meta"><span class="event-detail-kicker">${uiIcon("events")} COMMUNITY EVENT</span></div><div class="event-detail-grid">${detail("Date", date, "calendar")}${detail("Time", time, "clock")}${detail("Venue / Location", event.event_location, "pin")}${detail("Organizer", event.event_organizer, "users")}${detail("Contact", event.event_contact, "phone")}</div><div class="event-detail-description"><small>EVENT DETAILS</small><p>${escapeHtml(event.body).replace(/\n/g, "<br>")}</p></div></div>`;
+  openReadOnlyModal(event.title, content);
+}
+
 function drrmPage() {
   const drrm = pageData.drrm || { households: [], evacuation_centers: [], summary: {} }; const summary = drrm.summary || {};
   const capacity = Number(summary.evacuation_capacity || 0); const occupied = Number(summary.evacuation_occupied || 0); const available = Math.max(0, capacity - occupied);
   const rows = drrm.households.map(item => `<tr data-drrm-row="household" data-id="${item.id}"><td>${escapeHtml(item.household_number)}</td><td>${escapeHtml(item.address)}</td><td>${escapeHtml(item.sitio || item.purok || '')}</td><td>${statusBadge(item.priority_level)}</td><td>${item.resident_count || item.members?.length || 0}</td><td><div class="table-actions">${button('Edit', 'edit-drrm-household', 'secondary-btn sm', `data-id="${item.id}"`)}${button('Delete', 'delete-drrm-household', 'danger-btn sm', `data-id="${item.id}"`)}</div></td></tr>`).join('');
-  const centerRows = drrm.evacuation_centers.map(center => { const cap = Number(center.capacity || 0); const occ = Number(center.current_occupants || 0); const free = Math.max(0, cap - occ); return `<tr><td>${escapeHtml(center.name)}</td><td>${cap || 'N/A'}</td><td>${occ}</td><td>${cap ? free : 'N/A'}</td><td>${statusBadge(center.status || (free === 0 ? 'Full' : 'Open'))}</td><td><div class="table-actions">${button('Edit', 'edit-drrm-center', 'secondary-btn sm', `data-id="${center.id}"`)}${button('Delete', 'delete-drrm-center', 'danger-btn sm', `data-id="${center.id}"`)}</div></td></tr>`; }).join('');
+  const centerRows = drrm.evacuation_centers.map(center => { const cap = Number(center.capacity || 0); const occ = Number(center.current_occupants || 0); const free = Math.max(0, cap - occ); const activeRecords = (center.occupancy_records || []).filter(r => r.status === 'Checked In'); return `<tr><td>${escapeHtml(center.name)}</td><td>${cap || 'N/A'}</td><td>${occ}</td><td>${cap ? free : 'N/A'}</td><td>${statusBadge(center.status || (free === 0 ? 'Full' : 'Open'))}</td><td><div class="table-actions">${button('Check in household', 'check-in-drrm-household', 'primary-btn sm', `data-id="${center.id}"`)}${activeRecords.length ? button('View occupants', 'view-drrm-occupants', 'secondary-btn sm', `data-id="${center.id}"`) : ''}${button('Edit', 'edit-drrm-center', 'secondary-btn sm', `data-id="${center.id}"`)}${button('Delete', 'delete-drrm-center', 'danger-btn sm', `data-id="${center.id}"`)}</div></td></tr>`; }).join('');
   const drrmIcons = { households: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10Z"/><path d="M9 21v-6h6v6"/></svg>', priority: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 21 19H3L12 3Z"/><path d="M12 9v4M12 16h.01"/></svg>', vulnerable: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M10 8h3l1 4h-3l-1 4h5a4 4 0 1 1-1 2"/><path d="M10 8 8 12l-3 1"/><circle cx="15" cy="19" r="1.5"/></svg>', slots: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/><circle cx="12" cy="12" r="9"/></svg>' };
   return `${heading('DRRM Priority Map', 'Monitor vulnerable households and evacuation capacity from one map.')}
     <div class="stats-grid drrm-summary">${stat('Total households', summary.total_households || 0, drrmIcons.households, 'blue')}${stat('Vulnerable residents', summary.total_vulnerable_residents || 0, drrmIcons.vulnerable, 'purple')}${stat('Available evacuation slots', available, drrmIcons.slots, 'green')}</div>
     <div class="drrm-action-bar">${button('+ Add Household', 'new-household')}${button('+ Add Center', 'new-drrm-center')}${button('Refresh map', 'refresh')}</div>
-    <section class="panel drrm-map-panel"><div class="drrm-map-toolbar"><div class="drrm-mode-buttons"><button class="secondary-btn sm" data-action="drrm-view-mode">View Only</button><button class="secondary-btn sm" data-action="drrm-select-mode">Select Location</button></div><div class="drrm-map-actions"><button class="secondary-btn sm" data-action="drrm-locate">Locate me</button><button class="secondary-btn sm" data-action="drrm-fit">Zoom to markers</button><button class="secondary-btn sm" data-action="drrm-fullscreen">Fullscreen</button></div></div><div id="drrmMap" style="height:520px;border-radius:16px;overflow:hidden"></div></section>
+    <section class="panel drrm-map-panel"><div class="drrm-map-toolbar"><div class="drrm-mode-buttons"><button class="secondary-btn sm" data-action="drrm-view-mode">View Only</button><button class="secondary-btn sm" data-action="drrm-select-mode">Select Location</button></div><div class="drrm-map-actions"><button class="secondary-btn sm" data-action="drrm-fit">Zoom to markers</button><button class="secondary-btn sm" data-action="drrm-fullscreen">Fullscreen</button></div></div><div id="drrmMap" style="height:520px;border-radius:16px;overflow:hidden"></div></section>
     <section class="panel"><div class="filters drrm-filters"><input id="drrmSearch" placeholder="Search household, address, or sitio..."><select id="drrmPriority"><option value="">All priorities</option><option>Critical</option><option>High</option><option>Moderate</option><option>Low</option></select></div><div class="panel-head"><h3>Priority Households</h3></div><div class="table-wrap"><table><thead><tr><th>Household</th><th>Address</th><th>Sitio/Purok</th><th>Priority</th><th>Residents</th><th>Actions</th></tr></thead><tbody>${rows || `<tr><td colspan="6">No DRRM household records yet.</td></tr>`}</tbody></table></div></section>
     <section class="panel"><div class="panel-head"><h3>Evacuation Capacity</h3><span class="muted">${summary.evacuation_centers || 0} active centers</span></div><div class="table-wrap"><table><thead><tr><th>Center</th><th>Capacity</th><th>Occupied</th><th>Available</th><th>Status</th><th>Actions</th></tr></thead><tbody>${centerRows || '<tr><td colspan="6">No evacuation centers.</td></tr>'}</tbody></table></div></section>`;
 }
 
 function drrmDistanceKm(a, b) { const rad = Math.PI / 180; const dLat = (b[0] - a[0]) * rad; const dLng = (b[1] - a[1]) * rad; const x = Math.sin(dLat / 2) ** 2 + Math.cos(a[0] * rad) * Math.cos(b[0] * rad) * Math.sin(dLng / 2) ** 2; return 6371 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x)); }
 
-function renderDrrmMap() {
+function renderDrrmMapLegacy() {
   const mapElement = $('#drrmMap'); if (!mapElement || typeof L === 'undefined') return; const drrm = pageData.drrm || {}; const households = drrm.households || []; const centers = drrm.evacuation_centers || [];
-  const map = L.map(mapElement).setView([13.9965, 120.6732], 15); map.setMaxBounds([[13.975, 120.645], [14.020, 120.700]]); map.options.maxBoundsViscosity = .85; L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(map);
-  const householdLayer = L.layerGroup().addTo(map); const householdMarkers = []; const centerLayer = L.layerGroup().addTo(map); L.control.layers(null, { Households: householdLayer, 'Evacuation Centers': centerLayer }, { collapsed: false }).addTo(map);
+  const map = L.map(mapElement).setView([13.9965, 120.6732], 15); map.setMaxBounds([[13.975, 120.645], [14.020, 120.700]]); map.options.maxBoundsViscosity = .85; L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(map);
+  const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Imagery © Esri' });
+  const streetLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' });
+  const householdLayer = L.layerGroup().addTo(map); const householdMarkers = []; const centerLayer = L.layerGroup().addTo(map); L.control.layers({ Satellite: satelliteLayer, Streets: streetLayer }, { Households: householdLayer, 'Evacuation Centers': centerLayer }, { collapsed: false }).addTo(map);
   const legendControl = L.control({ position: 'bottomleft' });
   legendControl.onAdd = () => { const div = L.DomUtil.create('div', 'drrm-map-legend leaflet-control'); div.innerHTML = '<strong>Legend</strong><span><i class="legend-evacuation"><svg viewBox="0 0 24 24"><path d="M12 21s7-3.5 7-9V5l-7-3-7 3v7c0 5.5 7 9 7 9Z"/><path d="M12 8v5M9.5 10.5h5"/></svg></i> Evacuation Center</span><hr><strong>Household Priority</strong><span><i class="legend-dot critical"></i> Critical <i class="legend-dot high"></i> High <i class="legend-dot moderate"></i> Moderate <i class="legend-dot low"></i> Low</span>'; L.DomEvent.disableClickPropagation(div); return div; }; legendControl.addTo(map);
   let mode = 'view'; let drawPoints = [];
@@ -473,7 +500,7 @@ function renderDrrmMap() {
 function applyDrrmFilters() { const drrm = pageData.drrm || {}; const query = ($('#drrmSearch')?.value || '').toLowerCase(); const priority = $('#drrmPriority')?.value || ''; $$('#pageContent tbody tr[data-drrm-row="household"]').forEach(row => { const item = (drrm.households || []).find(h => String(h.id) === row.dataset.id); const show = item && (!query || row.textContent.toLowerCase().includes(query)) && (!priority || item.priority_level === priority); row.classList.toggle('hidden', !show); }); if (!window.drrmMapActions) return; window.drrmMapActions.householdMarkers.forEach(layer => { const item = layer.drrmData; const text = `${item.household_number} ${item.address || ''} ${item.sitio || item.purok || ''}`.toLowerCase(); const show = (!query || text.includes(query)) && (!priority || item.priority_level === priority); if (show) window.drrmMapActions.householdLayer.addLayer(layer); else window.drrmMapActions.householdLayer.removeLayer(layer); }); }
 function residentsPage() {
   const residents = pageData.residents || [];
-  const rows = residents.map(resident => `<tr><td>${resident.id}</td><td>${escapeHtml(resident.name)}</td><td>${escapeHtml(resident.email)}</td><td>${resident.is_active ? statusBadge("Active") : statusBadge("Inactive")}</td><td><div class="table-actions">${button(resident.is_active ? "Deactivate" : "Activate", "toggle-resident", "secondary-btn sm", `data-id="${resident.id}" data-active="${resident.is_active}"`)}${button("Delete", "delete-resident", "danger-btn sm", `data-id="${resident.id}"`)}</div></td></tr>`).join("");
+  const rows = residents.map(resident => "<tr><td>" + resident.id + "</td><td>" + escapeHtml(resident.name) + "</td><td>" + escapeHtml(resident.email) + "</td><td>" + statusBadge(resident.verification_status === "pending" ? "Pending Verification" : resident.is_active ? "Active" : "Inactive") + "</td><td><div class='table-actions'>" + (resident.verification_status === "pending" ? button("View Proof", "view-resident-proof", "secondary-btn sm", "data-id='" + resident.id + "'") + button("Approve", "approve-resident", "primary-btn sm", "data-id='" + resident.id + "'") + button("Reject", "reject-resident", "danger-btn sm", "data-id='" + resident.id + "'") : button(resident.is_active ? "Deactivate" : "Activate", "toggle-resident", "secondary-btn sm", "data-id='" + resident.id + "' data-active='" + resident.is_active + "'") + button("Delete", "delete-resident", "danger-btn sm", "data-id='" + resident.id + "'")) + "</div></td></tr>").join("");
   return `${heading("Manage Residents", "Review database accounts and control resident access.", mode === "admin" ? button("+ Add Resident", "new-resident", "primary-btn sm") : "")}<section class="panel">
     <div class="filters"><input id="residentSearch" placeholder="Search by database ID, name, or email..."></div>
     <div class="table-wrap"><table class="residents-table"><thead><tr><th>ID</th><th>Full Name</th><th>Email</th><th>Account Status</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -525,7 +552,7 @@ function reportsPage() {
   return `${heading("Reports", "Monitor service activity and export request records.", button("Export Requests CSV", "export-csv", "secondary-btn"))}
     <div class="reports-grid">${stat("Total Residents", report.total_residents || 0, uiIcon("user"))}${stat("Published Services", report.total_services || 0, uiIcon("services"), "purple")}${stat("Total Requests", total, uiIcon("requests"), "green")}</div>
     <div class="dashboard-columns reports-panels"><section class="panel report-panel"><div class="panel-head"><div><h3>Request status overview</h3><p class="muted">Track every request from submission to pickup.</p></div></div><div class="report-status-grid">${statusCards}</div><div class="request-flow"><span>Pending</span><i>→</i><span>Processing</span><i>→</i><span>Ready for Pickup</span><i>→</i><span>Claimed</span></div></section>
-    <section class="panel report-panel"><div class="panel-head"><div><h3>Requests by service</h3><p class="muted">Compare demand across published services.</p></div></div><div class="table-wrap"><table><thead><tr><th>Service</th><th>Requests</th></tr></thead><tbody>${services || `<tr><td colspan="2"><div class="report-empty">No request records yet.</div></td></tr>`}</tbody></table></div></section></div>`;
+    <section class="panel report-panel"><div class="panel-head"><div><h3>Requests by service</h3><p class="muted">Compare demand across published services.</p></div></div><div class="table-wrap report-table-wrap"><table class="report-table"><thead><tr><th>Service</th><th>Requests</th></tr></thead><tbody>${services || `<tr><td colspan="2"><div class="report-empty">No request records yet.</div></td></tr>`}</tbody></table></div></section></div>`;
 }
 
 function auditLogsPage() { const data = pageData.auditLogs || { logs: { data: [] } }; const rows = (data.logs.data || []).map(log => `<tr><td>${escapeHtml(log.user?.name || "System")}</td><td>${escapeHtml(log.action)}</td><td>${escapeHtml(log.module)}</td><td>${escapeHtml(log.description || "")}</td><td>${escapeHtml(new Date(log.created_at).toLocaleString())}</td><td>${statusBadge(log.status)}</td></tr>`).join(""); return `${heading(mode === "admin" ? "Audit Logs" : "My Activity", mode === "admin" ? "Review system activity." : "Review your account activity.", mode === "admin" ? button("Print / Save PDF", "export-audit-pdf", "secondary-btn") : "")}<section class="panel"><form id="auditLogFilters" class="filters"><input type="date" name="from" value="${escapeHtml(pageData.auditFilters?.from || "")}"><input type="date" name="to" value="${escapeHtml(pageData.auditFilters?.to || "")}"><button type="submit" class="primary-btn sm">Apply Filter</button><button type="button" class="secondary-btn sm" data-action="clear-audit-filters">Clear</button></form><div class="table-wrap"><table><thead><tr><th>User</th><th>Action</th><th>Module</th><th>Description</th><th>Date/Time</th><th>Status</th></tr></thead><tbody>${rows || `<tr><td colspan="6">No audit records found.</td></tr>`}</tbody></table></div></section>`; }
@@ -661,6 +688,7 @@ function toggleMobileNav() {
 function go(next) {
   const allowed = (mode === "admin" ? adminNav : residentNav).some(([label]) => label === next);
   if (!allowed && !["Help", "Settings"].includes(next)) return;
+  if (next === "Manage Requests") pageData.requestArchive = "active";
   page = next;
   closeMobileNav();
   void render();
@@ -748,10 +776,10 @@ function announcementFields(announcement = {}, eventOnly = false) {
   const categories = eventOnly ? ["Event"] : ["General", "Community", "System", "Event"];
   return [
     { name: "title", label: "Title", value: announcement.title, required: true, maxLength: 255, full: true },
-    ...(eventOnly ? [{ name: "event_date", label: "Event date", type: "date", value: announcement.event_date || "", required: true }, { name: "event_time", label: "Event time", type: "time", value: announcement.event_time || "", required: true }] : []),
+    ...(eventOnly ? [{ name: "event_date", label: "Event date", type: "date", value: announcement.event_date || "", required: true }, { name: "event_time", label: "Event time", type: "time", value: announcement.event_time || "", required: true }, { name: "event_location", label: "Venue / location", value: announcement.event_location || "", required: true }, { name: "event_organizer", label: "Organizer", value: announcement.event_organizer || "" }, { name: "event_contact", label: "Contact details", value: announcement.event_contact || "", help: "Phone number, email, or office contact." }] : []),
     ...(eventOnly ? [] : [{ name: "category", label: "Category", type: "select", value: announcement.category, options: categories.map(value => ({ value, label: value })) }]),
     { name: "is_published", label: "Visibility", type: "select", value: announcement.is_published === false ? "0" : "1", options: [{ value: "1", label: "Published" }, { value: "0", label: "Draft" }] },
-    { name: "body", label: "Details, requirements, or schedule", type: "textarea", value: announcement.body, required: true, full: true }
+    { name: "body", label: eventOnly ? "Event details / schedule" : "Details, requirements, or schedule", type: "textarea", value: announcement.body, placeholder: eventOnly ? "Describe what residents should know: activities, requirements, reminders, and what to bring." : "Add the important details residents need to know.", required: true, full: true }
   ];
 }
 
@@ -867,6 +895,10 @@ async function action(name, element) {
       if (!drrmCenterLocationReady) { window.drrmMapActions?.setMode('select-center'); return; }
       openModal('Add Evacuation Center', 'Add a center and track its capacity.', [{ name: 'name', label: 'Center name', required: true }, { name: 'address', label: 'Address', required: true }, { name: 'latitude', label: 'Latitude', type: 'number', required: true, value: drrmPickedLocation?.latitude?.toFixed(6) || '13.9965' }, { name: 'longitude', label: 'Longitude', type: 'number', required: true, value: drrmPickedLocation?.longitude?.toFixed(6) || '120.6732' }, { name: 'capacity', label: 'Capacity', type: 'number' }, { name: 'current_occupants', label: 'Current occupants', type: 'number', value: '0' }, { name: 'status', label: 'Status', type: 'select', options: [{ value: 'Open', label: 'Open' }, { value: 'Full', label: 'Full' }, { value: 'Temporarily Closed', label: 'Temporarily Closed' }] }], 'Save center', async formData => { await api('/api/admin/drrm/evacuation-centers', { method: 'POST', body: JSON.stringify(Object.fromEntries(formData)) }); toast('Evacuation center added.'); drrmCenterLocationReady = false; await render(); });
       break;
+    case "check-in-drrm-household": { const center = (pageData.drrm.evacuation_centers || []).find(c => String(c.id) === element.dataset.id); const households = pageData.drrm.households || []; if (!center) return; openModal('Check in household', `Available capacity: ${center.available_capacity ?? 'Not set'}`, [{ name: 'household_id', label: 'Household', type: 'select', required: true, options: households.map(h => ({ value: h.id, label: `${h.household_number} — ${h.resident_count} residents` })) }, { name: 'member_count', label: 'Members checking in', type: 'number', required: true, value: '1' }, { name: 'male_count', label: 'Male count', type: 'number', value: '0' }, { name: 'female_count', label: 'Female count', type: 'number', value: '0' }, { name: 'senior_count', label: 'Senior count', type: 'number', value: '0' }, { name: 'pwd_count', label: 'PWD count', type: 'number', value: '0' }, { name: 'special_needs_count', label: 'Other special-needs count', type: 'number', value: '0' }, { name: 'notes', label: 'Notes', type: 'textarea' }], 'Check in', async formData => { await api(`/api/admin/drrm/evacuation-centers/${center.id}/check-in`, { method: 'POST', body: JSON.stringify(Object.fromEntries(formData)) }); toast('Household checked in.'); await render(); }); break; }
+    case "view-drrm-occupants": { const center = (pageData.drrm.evacuation_centers || []).find(c => String(c.id) === element.dataset.id); if (!center) return; const rows = (center.occupancy_records || []).filter(r => r.status === 'Checked In').map(r => `<tr><td>${escapeHtml(r.household?.household_number || '')}</td><td>${r.member_count}</td><td>${r.male_count}/${r.female_count}</td><td>${r.senior_count}/${r.pwd_count}/${r.special_needs_count}</td><td>${button('Check out', 'check-out-drrm-household', 'danger-btn sm', `data-id="${r.id}"`)}</td></tr>`).join(''); openModal(`Occupants — ${escapeHtml(center.name)}`, `<div class="table-wrap"><table><thead><tr><th>Household</th><th>Members</th><th>M/F</th><th>Senior/PWD/Special</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="5">No active occupants.</td></tr>'}</tbody></table></div>`, [], 'Close', async () => {}); break; }
+    case "check-out-drrm-household": { if (!confirm('Check out this household?')) return; await api(`/api/admin/drrm/evacuation-records/${element.dataset.id}/check-out`, { method: 'POST' }); toast('Household checked out.'); await render(); break; }
+      break;
     case "edit-drrm-household": { const h = (pageData.drrm.households || []).find(item => String(item.id) === element.dataset.id); if (!h) return; openModal('Edit Household', 'Update location and vulnerability counts.', [{ name: 'address', label: 'Address', required: true, value: h.address }, { name: 'sitio', label: 'Sitio', value: h.sitio || h.purok || '' }, { name: 'landmark', label: 'Landmark', value: h.landmark || '' }, { name: 'latitude', label: 'Latitude', type: 'number', required: true, value: h.latitude }, { name: 'longitude', label: 'Longitude', type: 'number', required: true, value: h.longitude }, { name: 'resident_count', label: 'Residents', type: 'number', required: true, value: h.resident_count || 0 }, { name: 'senior_count', label: 'Seniors', type: 'number', value: h.senior_count || 0 }, { name: 'pwd_count', label: 'PWD', type: 'number', value: h.pwd_count || 0 }, { name: 'bedridden_count', label: 'Bedridden', type: 'number', value: h.bedridden_count || 0 }, { name: 'pregnant_count', label: 'Pregnant', type: 'number', value: h.pregnant_count || 0 }, { name: 'infant_count', label: 'Infants', type: 'number', value: h.infant_count || 0 }, { name: 'notes', label: 'Medical/rescue notes', type: 'textarea', full: true, value: h.notes || '' }], 'Save changes', async formData => { await api(`/api/admin/drrm/households/${h.id}`, { method: 'PATCH', body: JSON.stringify(Object.fromEntries(formData)) }); toast('Household updated.'); await render(); }); break; }
     case "edit-drrm-center": { const c = (pageData.drrm.evacuation_centers || []).find(item => String(item.id) === element.dataset.id); if (!c) return; openModal('Edit Evacuation Center', 'Update capacity and operating status.', [{ name: 'name', label: 'Center name', required: true, value: c.name }, { name: 'address', label: 'Address', required: true, value: c.address }, { name: 'latitude', label: 'Latitude', type: 'number', required: true, value: c.latitude }, { name: 'longitude', label: 'Longitude', type: 'number', required: true, value: c.longitude }, { name: 'capacity', label: 'Capacity', type: 'number', value: c.capacity || 0 }, { name: 'current_occupants', label: 'Current occupants', type: 'number', value: c.current_occupants || 0 }, { name: 'status', label: 'Status', type: 'select', value: c.status || 'Open', options: [{ value: 'Open', label: 'Open' }, { value: 'Full', label: 'Full' }, { value: 'Temporarily Closed', label: 'Temporarily Closed' }] }], 'Save changes', async formData => { await api(`/api/admin/drrm/evacuation-centers/${c.id}`, { method: 'PATCH', body: JSON.stringify(Object.fromEntries(formData)) }); toast('Evacuation center updated.'); await render(); }); break; }
 function openDrrmHouseholdModal() {
@@ -929,13 +961,17 @@ function openDrrmHouseholdModal() {
       const request = pageData.requests.find(item => String(item.id) === String(element.dataset.id));
       if (!request || !(await confirmAction("Restore request", `Restore ${request.reference_code} to the active list?`, "Restore"))) return;
       await api(`/api/requests/${request.id}/restore`, { method: "PATCH", body: JSON.stringify({}) });
-      toast("Request restored."); await render(); break;
+      pageData.requestArchive = "active";
+      toast("Request restored and returned to Active Requests."); await render(); break;
     }
     case "new-feedback":
       await createFeedback();
       break;
     case "feedback-details":
       await viewFeedback(element.dataset.id);
+      break;
+    case "event-details":
+      viewEventDetails(element.dataset.id);
       break;
     case "new-service":
       openModal("Add Barangay Service", "Only publish services and requirements confirmed by barangay personnel.", serviceFields({ is_active: true }), "Save service", async formData => {
@@ -1005,9 +1041,9 @@ function openTemplateEditor(service) {
     }
     case "delete-service": {
       const service = pageData.services.find(item => String(item.id) === element.dataset.id);
-      if (!service || !confirm(`Permanently delete "${service.name}"? This cannot be undone.`)) return;
+      if (!service || !confirm(`Archive "${service.name}"? It will be removed from the resident service list, but existing requests and history will be preserved.`)) return;
       await api(`/api/services/${service.id}`, { method: "DELETE" });
-      toast("Service deleted.");
+      toast("Service archived. Existing requests were preserved.");
       await render();
       break;
     }    case "toggle-service": {
@@ -1078,6 +1114,36 @@ function openTemplateEditor(service) {
       if (!resident || !confirm(`Delete the resident account for "${resident.name}"? This cannot be undone.`)) return;
       await api(`/api/residents/${resident.id}`, { method: "DELETE" });
       toast("Resident account deleted.");
+      await render();
+      break;
+    }
+    case "view-resident-proof":
+      window.open("/api/residents/" + element.dataset.id + "/verification-proof", "_blank", "noopener");
+      break;
+    case "approve-resident": {
+      const resident = pageData.residents.find(item => String(item.id) === element.dataset.id);
+      if (!resident) return;
+      openModal(
+        "Approve resident application?",
+        "Approve the application of " + resident.name + "? This will activate the account and allow access to barangay services.",
+        [],
+        "Approve account",
+        async () => {
+          await api("/api/residents/" + resident.id + "/verification", {
+            method: "PATCH",
+            body: JSON.stringify({ action: "approve" })
+          });
+          toast("Resident application approved.");
+          await render();
+        }
+      );
+      break;
+    }
+    case "reject-resident": {
+      const reason = prompt("Reason for rejecting this application:");
+      if (!reason?.trim()) return;
+      await api("/api/residents/" + element.dataset.id + "/verification", { method: "PATCH", body: JSON.stringify({ action: "reject", rejection_reason: reason.trim() }) });
+      toast("Resident application rejected.");
       await render();
       break;
     }
@@ -1433,4 +1499,42 @@ if (resetPath) {
   showResetPasswordForm(decodeURIComponent(resetPath[1]), new URLSearchParams(window.location.search).get("email") || "");
 } else {
   restoreSession();
+}
+
+// MapLibre implementation for the DRRM map. It intentionally keeps the existing
+// window.drrmMapActions contract so the current toolbar and forms continue to work.
+function renderDrrmMap() {
+  const mapElement = $('#drrmMap');
+  if (!mapElement) return;
+  if (typeof maplibregl === 'undefined') { renderDrrmMapLegacy(); return; }
+  const drrm = pageData.drrm || {};
+  const households = drrm.households || [];
+  const centers = drrm.evacuation_centers || [];
+  const toFeature = (item, kind) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [Number(item.longitude), Number(item.latitude)] }, properties: { ...item, kind } });
+  const householdData = { type: 'FeatureCollection', features: households.filter(h => h.latitude != null && h.longitude != null).map(h => toFeature(h, 'household')) };
+  const centerData = { type: 'FeatureCollection', features: centers.filter(c => c.latitude != null && c.longitude != null).map(c => toFeature(c, 'center')) };
+  const mapTilerKey = window.eBarangayConfig?.mapTilerKey;
+  const osmStyle = { version: 8, sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: '© OpenStreetMap contributors', maxzoom: 19 } }, layers: [{ id: 'osm', type: 'raster', source: 'osm' }] };
+  const mapStyle = mapTilerKey
+    ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${encodeURIComponent(mapTilerKey)}`
+    : osmStyle;
+  if (!mapTilerKey) console.warn('MAPTILER_API_KEY is not configured; using OpenStreetMap fallback.');
+  let map;
+  try { map = new maplibregl.Map({ container: mapElement, style: mapStyle, center: [120.6732, 13.9965], zoom: 14.5, attributionControl: true }); } catch (error) { console.warn('MapLibre initialization failed; using Leaflet fallback.', error); renderDrrmMapLegacy(); return; }
+  map.on('error', event => { if (event?.error) console.warn('DRRM MapLibre error:', event.error); });
+  map.addControl(new maplibregl.NavigationControl(), 'top-right');
+  map.addControl(new maplibregl.FullscreenControl(), 'top-right');
+  let mode = 'view';
+  const householdMarkers = [];
+  const centerMarkers = [];
+  const setMode = next => { mode = next; map.getCanvas().style.cursor = next === 'view' ? '' : 'crosshair'; toast(next === 'select-center' ? 'Click the map to place the evacuation center.' : next === 'select' ? 'Select Location mode enabled.' : 'View Only mode enabled.'); };
+  const popup = (html, coordinates) => new maplibregl.Popup({ offset: 12, maxWidth: '320px' }).setLngLat(coordinates).setHTML(html).addTo(map);
+  const householdPopup = h => `<b>${escapeHtml(h.household_number)}</b><br>${escapeHtml(h.address || '')}<br>Sitio/Purok: ${escapeHtml(h.sitio || h.purok || 'Not specified')}<br>Priority: ${escapeHtml(h.priority_level || 'Not set')}<hr>Residents: ${h.resident_count || 0}<br>Seniors: ${h.senior_count || 0} · PWD: ${h.pwd_count || 0}<br>Bedridden: ${h.bedridden_count || 0} · Pregnant: ${h.pregnant_count || 0}<br>Infants: ${h.infant_count || 0}`;
+  const centerPopup = c => { const cap = Number(c.capacity || 0); const occ = Number(c.current_occupants || 0); return `<b>${escapeHtml(c.name)}</b><br>${escapeHtml(c.address || '')}<hr>Capacity: ${cap || 'Not set'}<br>Occupied: ${occ}<br>Available: ${cap ? Math.max(0, cap - occ) : 'Not set'}<br>Status: ${escapeHtml(c.status || (cap && cap <= occ ? 'Full' : 'Open'))}`; };
+  const addMarkers = () => { households.forEach(h => { if (h.latitude == null || h.longitude == null) return; const el = document.createElement('button'); el.type = 'button'; el.className = `drrm-map-marker priority-${String(h.priority_level || 'low').toLowerCase()}`; el.title = h.household_number || 'Household'; el.addEventListener('click', event => { event.stopPropagation(); popup(householdPopup(h), [Number(h.longitude), Number(h.latitude)]); }); householdMarkers.push(new maplibregl.Marker({ element: el }).setLngLat([Number(h.longitude), Number(h.latitude)]).addTo(map)); }); centers.forEach(c => { if (c.latitude == null || c.longitude == null) return; const el = document.createElement('button'); el.type = 'button'; el.className = 'drrm-map-marker evacuation'; el.title = c.name || 'Evacuation center'; el.addEventListener('click', event => { event.stopPropagation(); popup(centerPopup(c), [Number(c.longitude), Number(c.latitude)]); }); centerMarkers.push(new maplibregl.Marker({ element: el }).setLngLat([Number(c.longitude), Number(c.latitude)]).addTo(map)); }); };
+  const fit = () => { const points = [...householdData.features, ...centerData.features]; if (!points.length) return; const bounds = points.reduce((b, f) => b.extend(f.geometry.coordinates), new maplibregl.LngLatBounds(points[0].geometry.coordinates, points[0].geometry.coordinates)); map.fitBounds(bounds, { padding: 80, maxZoom: 16 }); };
+  const householdLayer = { addLayer: marker => marker.addTo(map), removeLayer: marker => marker.remove() };
+  window.drrmMapActions = { map, householdLayer, householdMarkers, centerLayer: { addLayer: marker => marker.addTo(map), removeLayer: marker => marker.remove() }, centerMarkers, setMode, fit, locate: () => navigator.geolocation?.getCurrentPosition(pos => map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 17 }), () => toast('Location access was not available.')) };
+  map.on('click', event => { if (mode === 'select-center') { drrmCenterLocationReady = true; drrmPickedLocation = { latitude: event.lngLat.lat, longitude: event.lngLat.lng }; setMode('view'); popup('<b>Evacuation center location selected</b><br>Click + Add Center again to continue.', [event.lngLat.lng, event.lngLat.lat]); return; } if (mode === 'select') { drrmPickedLocation = { latitude: event.lngLat.lat, longitude: event.lngLat.lng }; setMode('view'); popup('<b>Selected location</b><br>Click Add Household to use this point.', [event.lngLat.lng, event.lngLat.lat]); } });
+  map.on('load', () => { map.addSource('households', { type: 'geojson', data: householdData }); map.addSource('evacuation-centers', { type: 'geojson', data: centerData }); map.addLayer({ id: 'household-points', type: 'circle', source: 'households', paint: { 'circle-radius': 7, 'circle-color': ['match', ['get', 'priority_level'], 'Critical', '#dc2626', 'High', '#ea580c', 'Moderate', '#ca8a04', '#16a34a'], 'circle-stroke-color': '#fff', 'circle-stroke-width': 2 } }); map.addLayer({ id: 'center-points', type: 'circle', source: 'evacuation-centers', paint: { 'circle-radius': 9, 'circle-color': '#1674ed', 'circle-stroke-color': '#fff', 'circle-stroke-width': 3 } }); addMarkers(); requestAnimationFrame(() => { map.resize(); fit(); }); });
 }

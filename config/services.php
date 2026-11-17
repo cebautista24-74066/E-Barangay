@@ -2,6 +2,10 @@
 
 return [
 
+    'maptiler' => [
+        'key' => env('MAPTILER_API_KEY'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class ResidentAuthenticationTest extends TestCase
@@ -16,22 +17,23 @@ class ResidentAuthenticationTest extends TestCase
         $response = $this->postJson('/auth/register', [
             'name' => 'Jamie Resident',
             'email' => 'JAMIE@example.com',
-            'password' => 'secure-pass-123',
-            'password_confirmation' => 'secure-pass-123',
+            'password' => 'Secure-pass-123!',
+            'password_confirmation' => 'Secure-pass-123!',
+            'proof_image' => UploadedFile::fake()->create('id.jpg', 100, 'image/jpeg'),
             'role' => 'Administrator',
         ]);
 
         $response->assertCreated()
-            ->assertJsonPath('user.name', 'Jamie Resident')
-            ->assertJsonPath('user.email', 'jamie@example.com')
-            ->assertJsonPath('user.role', 'Resident')
+            ->assertJsonPath('message', 'Your account application was submitted and is pending admin approval.')
             ->assertJsonStructure(['csrf_token']);
 
         $user = User::where('email', 'jamie@example.com')->firstOrFail();
 
         $this->assertSame('Resident', $user->role);
-        $this->assertTrue(Hash::check('secure-pass-123', $user->password));
-        $this->assertAuthenticatedAs($user);
+        $this->assertSame('pending', $user->verification_status);
+        $this->assertFalse($user->is_active);
+        $this->assertTrue(Hash::check('Secure-pass-123!', $user->password));
+        $this->assertGuest();
     }
 
     public function test_registration_requires_matching_password_confirmation(): void
@@ -41,6 +43,7 @@ class ResidentAuthenticationTest extends TestCase
             'email' => 'jamie@example.com',
             'password' => 'secure-pass-123',
             'password_confirmation' => 'different-pass-123',
+            'proof_image' => UploadedFile::fake()->create('id.jpg', 100, 'image/jpeg'),
         ])->assertUnprocessable()
             ->assertJsonValidationErrors('password');
 
@@ -56,6 +59,7 @@ class ResidentAuthenticationTest extends TestCase
             'email' => 'JAMIE@example.com',
             'password' => 'secure-pass-123',
             'password_confirmation' => 'secure-pass-123',
+            'proof_image' => UploadedFile::fake()->create('id.jpg', 100, 'image/jpeg'),
         ])->assertUnprocessable()
             ->assertJsonValidationErrors('email');
 
@@ -139,5 +143,33 @@ class ResidentAuthenticationTest extends TestCase
             ->assertJsonValidationErrors('email');
 
         $this->assertGuest();
+    }
+
+    public function test_pending_resident_cannot_log_in_until_an_administrator_approves_the_application(): void
+    {
+        $this->post('/auth/register', [
+            'name' => 'Pending Resident',
+            'email' => 'pending@example.com',
+            'password' => 'Secure-pass-123!',
+            'password_confirmation' => 'Secure-pass-123!',
+            'proof_image' => UploadedFile::fake()->create('id.jpg', 100, 'image/jpeg'),
+        ])->assertCreated();
+
+        $this->postJson('/auth/login', [
+            'email' => 'pending@example.com',
+            'password' => 'Secure-pass-123!',
+        ])->assertForbidden();
+
+        $admin = User::factory()->create(['role' => 'Administrator']);
+        $resident = User::where('email', 'pending@example.com')->firstOrFail();
+
+        $this->actingAs($admin)->patchJson('/api/residents/'.$resident->id.'/verification', [
+            'action' => 'approve',
+        ])->assertOk()->assertJsonPath('resident.verification_status', 'approved');
+
+        $this->postJson('/auth/login', [
+            'email' => 'pending@example.com',
+            'password' => 'Secure-pass-123!',
+        ])->assertOk();
     }
 }
