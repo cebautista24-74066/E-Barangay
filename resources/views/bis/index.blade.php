@@ -217,8 +217,9 @@
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.18.0/dist/maplibre-gl.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/maplibre-gl@6.18.0/dist/maplibre-gl.js"></script>
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script>
-    window.eBarangayConfig = { mapTilerKey: @json(config('services.maptiler.key')) };
+    window.eBarangayConfig = { mapTilerKey: @json(config('services.maptiler.key')), roadsGeoJsonUrl: '/maps/road.geojson', buildingsGeoJsonUrl: '/maps/buildings.geojson' };
   </script>
   <script src="/js/bis/app.js?v={{ filemtime(public_path('js/bis/app.js')) }}"></script>
 </body>

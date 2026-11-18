@@ -472,7 +472,7 @@ function drrmPage() {
   return `${heading('DRRM Priority Map', 'Monitor vulnerable households and evacuation capacity from one map.')}
     <div class="stats-grid drrm-summary">${stat('Total households', summary.total_households || 0, drrmIcons.households, 'blue')}${stat('Vulnerable residents', summary.total_vulnerable_residents || 0, drrmIcons.vulnerable, 'purple')}${stat('Available evacuation slots', available, drrmIcons.slots, 'green')}</div>
     <div class="drrm-action-bar">${button('+ Add Household', 'new-household')}${button('+ Add Center', 'new-drrm-center')}${button('Refresh map', 'refresh')}</div>
-    <section class="panel drrm-map-panel"><div class="drrm-map-toolbar"><div class="drrm-mode-buttons"><button class="secondary-btn sm" data-action="drrm-view-mode">View Only</button><button class="secondary-btn sm" data-action="drrm-select-mode">Select Location</button></div><div class="drrm-map-actions"><button class="secondary-btn sm" data-action="drrm-fit">Zoom to markers</button><button class="secondary-btn sm" data-action="drrm-fullscreen">Fullscreen</button></div></div><div id="drrmMap" style="height:520px;border-radius:16px;overflow:hidden"></div></section>
+    <section class="panel drrm-map-panel"><div class="drrm-map-toolbar"><div class="drrm-mode-buttons"><button class="secondary-btn sm" data-action="drrm-view-mode">View Only</button><button class="secondary-btn sm" data-action="drrm-select-mode">Select Location</button></div><div class="drrm-map-actions"><button class="secondary-btn sm" data-action="drrm-fit">Zoom to markers</button><button class="secondary-btn sm" data-action="drrm-fullscreen">Fullscreen</button></div></div><div id="drrmMap" data-roads-url="${escapeHtml(window.eBarangayConfig?.roadsGeoJsonUrl || '')}" style="height:520px;border-radius:16px;overflow:hidden"></div></section>
     <section class="panel"><div class="filters drrm-filters"><input id="drrmSearch" placeholder="Search household, address, or sitio..."><select id="drrmPriority"><option value="">All priorities</option><option>Critical</option><option>High</option><option>Moderate</option><option>Low</option></select></div><div class="panel-head"><h3>Priority Households</h3></div><div class="table-wrap"><table><thead><tr><th>Household</th><th>Address</th><th>Sitio/Purok</th><th>Priority</th><th>Residents</th><th>Actions</th></tr></thead><tbody>${rows || `<tr><td colspan="6">No DRRM household records yet.</td></tr>`}</tbody></table></div></section>
     <section class="panel"><div class="panel-head"><h3>Evacuation Capacity</h3><span class="muted">${summary.evacuation_centers || 0} active centers</span></div><div class="table-wrap"><table><thead><tr><th>Center</th><th>Capacity</th><th>Occupied</th><th>Available</th><th>Status</th><th>Actions</th></tr></thead><tbody>${centerRows || '<tr><td colspan="6">No evacuation centers.</td></tr>'}</tbody></table></div></section>`;
 }
@@ -484,17 +484,48 @@ function renderDrrmMapLegacy() {
   const map = L.map(mapElement).setView([13.9965, 120.6732], 15); map.setMaxBounds([[13.975, 120.645], [14.020, 120.700]]); map.options.maxBoundsViscosity = .85; L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(map);
   const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Imagery © Esri' });
   const streetLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' });
-  const householdLayer = L.layerGroup().addTo(map); const householdMarkers = []; const centerLayer = L.layerGroup().addTo(map); L.control.layers({ Satellite: satelliteLayer, Streets: streetLayer }, { Households: householdLayer, 'Evacuation Centers': centerLayer }, { collapsed: false }).addTo(map);
+  const roadOverlay = L.layerGroup().addTo(map);
+  const buildingOverlay = L.layerGroup().addTo(map);
+  const householdLayer = L.layerGroup().addTo(map); const householdMarkers = []; const centerLayer = L.layerGroup().addTo(map); L.control.layers({ Satellite: satelliteLayer, Streets: streetLayer }, { Roads: roadOverlay, Buildings: buildingOverlay, Households: householdLayer, 'Evacuation Centers': centerLayer }, { collapsed: false }).addTo(map);
+  const roadsUrl = mapElement.dataset.roadsUrl;
+  const buildingsUrl = window.eBarangayConfig?.buildingsGeoJsonUrl;
+  if (roadsUrl && window.jQuery) {
+    window.jQuery.getJSON(roadsUrl)
+      .done(data => {
+        L.geoJSON(data, { style: { color: '#ffffff', weight: 3, opacity: 0.96, lineCap: 'round', lineJoin: 'round' }, attribution: '© Esri' }).addTo(roadOverlay);
+      })
+      .fail((jqXHR, textStatus, errorThrown) => console.error('Unable to load roads GeoJSON:', roadsUrl, textStatus, errorThrown));
+  } else {
+    console.error('Roads GeoJSON URL or jQuery is missing.');
+  }
+  if (buildingsUrl && window.jQuery) {
+    window.jQuery.getJSON(buildingsUrl)
+      .done(data => {
+        const buildings = L.geoJSON(data, {
+          filter: feature => ['Polygon', 'MultiPolygon'].includes(feature?.geometry?.type),
+          style: { color: '#334155', weight: 1, opacity: 0.9, fillColor: '#f8fafc', fillOpacity: 0.42 },
+          onEachFeature: (feature, layer) => layer.on('click', event => {
+            drrmPickedLocation = { latitude: event.latlng.lat, longitude: event.latlng.lng };
+            L.popup().setLatLng(event.latlng).setContent('<b>Building selected</b><br><button class="primary-btn sm" data-action="new-household" data-building-add="true">Add Household</button>').openOn(map);
+          })
+        }).addTo(buildingOverlay);
+        if (!buildings.getLayers().length) console.error('Buildings GeoJSON loaded but contains no Polygon or MultiPolygon features:', buildingsUrl);
+      })
+      .fail((jqXHR, textStatus, errorThrown) => console.error('Unable to load buildings GeoJSON:', buildingsUrl, textStatus, errorThrown));
+  } else console.error('Buildings GeoJSON URL or jQuery is missing:', buildingsUrl);
   const legendControl = L.control({ position: 'bottomleft' });
   legendControl.onAdd = () => { const div = L.DomUtil.create('div', 'drrm-map-legend leaflet-control'); div.innerHTML = '<strong>Legend</strong><span><i class="legend-evacuation"><svg viewBox="0 0 24 24"><path d="M12 21s7-3.5 7-9V5l-7-3-7 3v7c0 5.5 7 9 7 9Z"/><path d="M12 8v5M9.5 10.5h5"/></svg></i> Evacuation Center</span><hr><strong>Household Priority</strong><span><i class="legend-dot critical"></i> Critical <i class="legend-dot high"></i> High <i class="legend-dot moderate"></i> Moderate <i class="legend-dot low"></i> Low</span>'; L.DomEvent.disableClickPropagation(div); return div; }; legendControl.addTo(map);
+  const legendElement = map.getContainer().querySelector('.drrm-map-legend');
+  if (legendElement) legendElement.innerHTML = '<strong>Legend</strong><strong>Household Risk</strong><span><i class="legend-dot critical"></i> Critical</span><span><i class="legend-dot high"></i> High</span><span><i class="legend-dot moderate"></i> Moderate</span><span><i class="legend-dot low"></i> Low</span><hr><span><i class="legend-dot evacuation"></i> Evacuation Center</span>';
   let mode = 'view'; let drawPoints = [];
   const setMode = next => { mode = next; map.getContainer().classList.toggle('drrm-drawing', next !== 'view'); if (next === 'view') map.doubleClickZoom.enable(); else map.doubleClickZoom.disable(); toast(next === 'select-center' ? 'Click the map to place the evacuation center.' : next === 'select' ? 'Select Location mode enabled.' : 'View Only mode enabled.'); };
   window.drrmMapActions = { map, householdLayer, householdMarkers, centerLayer, setMode, fit: () => { const group = L.featureGroup([householdLayer, centerLayer]); if (group.getLayers().length) map.fitBounds(group.getBounds().pad(.1)); }, locate: () => navigator.geolocation?.getCurrentPosition(pos => map.setView([pos.coords.latitude, pos.coords.longitude], 17), () => toast('Location access was not available.')) };
   map.on('click', event => { if (mode === 'select-center') { drrmCenterLocationReady = true; drrmPickedLocation = { latitude: event.latlng.lat, longitude: event.latlng.lng }; setMode('view'); L.popup().setLatLng(event.latlng).setContent('<b>Evacuation center location selected</b><br>Click + Add Center again to continue.').openOn(map); toast(`Center location selected: ${event.latlng.lat.toFixed(6)}, ${event.latlng.lng.toFixed(6)}`); return; } if (mode === 'select') { drrmPickedLocation = { latitude: event.latlng.lat, longitude: event.latlng.lng }; setMode('view'); L.popup().setLatLng(event.latlng).setContent('<b>Selected location</b><br>Click Add Household to use this point.').openOn(map); return; } });
   const nearestCenter = h => centers.reduce((best, c) => { const dist = drrmDistanceKm([Number(h.latitude), Number(h.longitude)], [Number(c.latitude), Number(c.longitude)]); return !best || dist < best.distance ? { center: c, distance: dist } : best; }, null); const colors = { Critical: '#dc2626', High: '#ea580c', Moderate: '#ca8a04', Low: '#16a34a' };
+  map.on('zoomend', () => { const radius = Math.max(2, Math.min(5, (map.getZoom() - 11) * 0.7)); householdMarkers.forEach(marker => marker.setRadius(radius)); }); setTimeout(() => map.fire('zoomend'), 0);
   households.forEach(h => { const near = nearestCenter(h); const popup = `<b>${escapeHtml(h.household_number)}</b><br>${escapeHtml(h.address || '')}<br>Sitio/Purok: ${escapeHtml(h.sitio || h.purok || 'Not specified')}<br>Priority: ${escapeHtml(h.priority_level)}<hr>Residents: ${h.resident_count || 0}<br>Seniors: ${h.senior_count || 0} · PWD: ${h.pwd_count || 0}<br>Bedridden: ${h.bedridden_count || 0} · Pregnant: ${h.pregnant_count || 0}<br>Infants: ${h.infant_count || 0}<br>Medical/rescue notes: ${escapeHtml(h.notes || 'None')}${near ? `<br>Nearest center: ${escapeHtml(near.center.name)}<br>Distance: ${near.distance.toFixed(2)} km` : ''}<br><br>${button('Edit', 'edit-drrm-household', 'secondary-btn sm', `data-id="${h.id}"`)} ${button('Delete', 'delete-drrm-household', 'danger-btn sm', `data-id="${h.id}"`)}`; const marker = L.circleMarker([h.latitude, h.longitude], { radius: 8, color: colors[h.priority_level] || colors.Low, fillColor: colors[h.priority_level] || colors.Low, fillOpacity: .9 }).bindPopup(popup); marker.drrmData = h; marker.addTo(householdLayer); householdMarkers.push(marker); });
   centers.forEach(c => { const cap = Number(c.capacity || 0); const occ = Number(c.current_occupants || 0); const free = Math.max(0, cap - occ); const status = c.status || (free === 0 && cap ? 'Full' : 'Open'); L.marker([c.latitude, c.longitude]).bindPopup(`<b>${escapeHtml(c.name)}</b><br>${escapeHtml(c.address)}<br>Capacity: ${cap || 'Not set'}<br>Occupied: ${occ}<br>Available: ${cap ? free : 'Not set'}<br>Status: ${escapeHtml(status)}<br><br>${button('Edit', 'edit-drrm-center', 'secondary-btn sm', `data-id="${c.id}"`)} ${button('Delete', 'delete-drrm-center', 'danger-btn sm', `data-id="${c.id}"`)}`).addTo(centerLayer); });
-  requestAnimationFrame(() => { map.invalidateSize(); const layers = [...householdLayer.getLayers(), ...centerLayer.getLayers()]; if (layers.length) { const group = L.featureGroup(layers); map.fitBounds(group.getBounds().pad(.15), { maxZoom: 16 }); } });
+  requestAnimationFrame(() => { map.invalidateSize(); const layers = [...centerLayer.getLayers()]; if (layers.length) { const group = L.featureGroup(layers); map.fitBounds(group.getBounds().pad(.15), { maxZoom: 16 }); } });
   applyDrrmFilters();
 }
 
@@ -946,7 +977,7 @@ async function exportRequests() {
 async function action(name, element) {
   switch (name) {
     case "drrm-view-mode": window.drrmMapActions?.setMode('view'); break;
-    case "drrm-select-mode": window.drrmMapActions?.setMode('select'); break;
+    case "drrm-select-mode": drrmPickedLocation = null; window.drrmMapActions?.setMode('select'); break;
     case "drrm-locate": window.drrmMapActions?.locate(); break;
     case "drrm-fit": window.drrmMapActions?.fit(); break;
     case "drrm-fullscreen": { const el = $('#drrmMap'); if (!document.fullscreenElement) el?.requestFullscreen?.(); else document.exitFullscreen?.(); break; }
@@ -957,6 +988,8 @@ async function action(name, element) {
     case "check-in-drrm-household": { const center = (pageData.drrm.evacuation_centers || []).find(c => String(c.id) === element.dataset.id); const households = pageData.drrm.households || []; if (!center) return; openModal('Check in household', `Available capacity: ${center.available_capacity ?? 'Not set'}`, [{ name: 'household_id', label: 'Household', type: 'select', required: true, options: households.map(h => ({ value: h.id, label: `${h.household_number} — ${h.resident_count} residents` })) }, { name: 'member_count', label: 'Members checking in', type: 'number', required: true, value: '1' }, { name: 'male_count', label: 'Male count', type: 'number', value: '0' }, { name: 'female_count', label: 'Female count', type: 'number', value: '0' }, { name: 'senior_count', label: 'Senior count', type: 'number', value: '0' }, { name: 'pwd_count', label: 'PWD count', type: 'number', value: '0' }, { name: 'special_needs_count', label: 'Other special-needs count', type: 'number', value: '0' }, { name: 'notes', label: 'Notes', type: 'textarea' }], 'Check in', async formData => { await api(`/api/admin/drrm/evacuation-centers/${center.id}/check-in`, { method: 'POST', body: JSON.stringify(Object.fromEntries(formData)) }); toast('Household checked in.'); await render(); }); break; }
     case "view-drrm-occupants": { const center = (pageData.drrm.evacuation_centers || []).find(c => String(c.id) === element.dataset.id); if (!center) return; const rows = (center.occupancy_records || []).filter(r => r.status === 'Checked In').map(r => `<tr><td>${escapeHtml(r.household?.household_number || '')}</td><td>${r.member_count}</td><td>${r.male_count}/${r.female_count}</td><td>${r.senior_count}/${r.pwd_count}/${r.special_needs_count}</td><td>${button('Check out', 'check-out-drrm-household', 'danger-btn sm', `data-id="${r.id}"`)}</td></tr>`).join(''); openModal(`Occupants — ${escapeHtml(center.name)}`, `<div class="table-wrap"><table><thead><tr><th>Household</th><th>Members</th><th>M/F</th><th>Senior/PWD/Special</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="5">No active occupants.</td></tr>'}</tbody></table></div>`, [], 'Close', async () => {}); break; }
     case "check-out-drrm-household": { if (!confirm('Check out this household?')) return; await api(`/api/admin/drrm/evacuation-records/${element.dataset.id}/check-out`, { method: 'POST' }); toast('Household checked out.'); await render(); break; }
+    case "delete-drrm-household": { const household = (pageData.drrm.households || []).find(item => String(item.id) === String(element.dataset.id)); if (!household || !confirm(`Delete household ${household.household_number}?`)) return; await api(`/api/admin/drrm/households/${household.id}`, { method: 'DELETE' }); toast('Household deleted.'); await render(); break; }
+    case "delete-drrm-center": { const center = (pageData.drrm.evacuation_centers || []).find(item => String(item.id) === String(element.dataset.id)); if (!center || !confirm(`Delete evacuation center ${center.name}?`)) return; await api(`/api/admin/drrm/evacuation-centers/${center.id}`, { method: 'DELETE' }); toast('Evacuation center deleted.'); await render(); break; }
       break;
     case "edit-drrm-household": { const h = (pageData.drrm.households || []).find(item => String(item.id) === element.dataset.id); if (!h) return; openModal('Edit Household', 'Update location and vulnerability counts.', [{ name: 'address', label: 'Address', required: true, value: h.address }, { name: 'sitio', label: 'Sitio', value: h.sitio || h.purok || '' }, { name: 'landmark', label: 'Landmark', value: h.landmark || '' }, { name: 'latitude', label: 'Latitude', type: 'number', required: true, value: h.latitude }, { name: 'longitude', label: 'Longitude', type: 'number', required: true, value: h.longitude }, { name: 'resident_count', label: 'Residents', type: 'number', required: true, value: h.resident_count || 0 }, { name: 'senior_count', label: 'Seniors', type: 'number', value: h.senior_count || 0 }, { name: 'pwd_count', label: 'PWD', type: 'number', value: h.pwd_count || 0 }, { name: 'bedridden_count', label: 'Bedridden', type: 'number', value: h.bedridden_count || 0 }, { name: 'pregnant_count', label: 'Pregnant', type: 'number', value: h.pregnant_count || 0 }, { name: 'infant_count', label: 'Infants', type: 'number', value: h.infant_count || 0 }, { name: 'notes', label: 'Medical/rescue notes', type: 'textarea', full: true, value: h.notes || '' }], 'Save changes', async formData => { await api(`/api/admin/drrm/households/${h.id}`, { method: 'PATCH', body: JSON.stringify(Object.fromEntries(formData)) }); toast('Household updated.'); await render(); }); break; }
     case "edit-drrm-center": { const c = (pageData.drrm.evacuation_centers || []).find(item => String(item.id) === element.dataset.id); if (!c) return; openModal('Edit Evacuation Center', 'Update capacity and operating status.', [{ name: 'name', label: 'Center name', required: true, value: c.name }, { name: 'address', label: 'Address', required: true, value: c.address }, { name: 'latitude', label: 'Latitude', type: 'number', required: true, value: c.latitude }, { name: 'longitude', label: 'Longitude', type: 'number', required: true, value: c.longitude }, { name: 'capacity', label: 'Capacity', type: 'number', value: c.capacity || 0 }, { name: 'current_occupants', label: 'Current occupants', type: 'number', value: c.current_occupants || 0 }, { name: 'status', label: 'Status', type: 'select', value: c.status || 'Open', options: [{ value: 'Open', label: 'Open' }, { value: 'Full', label: 'Full' }, { value: 'Temporarily Closed', label: 'Temporarily Closed' }] }], 'Save changes', async formData => { await api(`/api/admin/drrm/evacuation-centers/${c.id}`, { method: 'PATCH', body: JSON.stringify(Object.fromEntries(formData)) }); toast('Evacuation center updated.'); await render(); }); break; }
@@ -1572,12 +1605,16 @@ function renderDrrmMap() {
   const toFeature = (item, kind) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [Number(item.longitude), Number(item.latitude)] }, properties: { ...item, kind } });
   const householdData = { type: 'FeatureCollection', features: households.filter(h => h.latitude != null && h.longitude != null).map(h => toFeature(h, 'household')) };
   const centerData = { type: 'FeatureCollection', features: centers.filter(c => c.latitude != null && c.longitude != null).map(c => toFeature(c, 'center')) };
+  const pointInRing = (point, ring) => { let inside = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1]; const intersects = ((yi > point[1]) !== (yj > point[1])) && point[0] < ((xj - xi) * (point[1] - yi)) / ((yj - yi) || Number.EPSILON) + xi; if (intersects) inside = !inside; } return inside; };
+  const pointInGeometry = (point, geometry) => geometry?.type === 'Polygon' ? pointInRing(point, geometry.coordinates[0]) : geometry?.type === 'MultiPolygon' ? geometry.coordinates.some(polygon => pointInRing(point, polygon[0])) : false;
+  const geometryCenter = geometry => { const ring = geometry?.type === 'Polygon' ? geometry.coordinates[0] : geometry?.type === 'MultiPolygon' ? geometry.coordinates[0]?.[0] : []; if (!ring?.length) return null; const sum = ring.reduce((total, point) => [total[0] + Number(point[0]), total[1] + Number(point[1])], [0, 0]); return [sum[0] / ring.length, sum[1] / ring.length]; };
+  const buildingRisk = feature => { const levels = { Critical: 4, High: 3, Moderate: 2, Low: 1 }; const normalized = value => { const key = String(value || '').trim().toLowerCase(); return Object.keys(levels).find(level => level.toLowerCase() === key) || 'None'; }; let matches = households.filter(h => pointInGeometry([Number(h.longitude), Number(h.latitude)], feature.geometry)); if (!matches.length) { const center = geometryCenter(feature.geometry); matches = households.filter(h => center && Math.hypot(Number(h.longitude) - center[0], Number(h.latitude) - center[1]) < 0.00035); } return matches.reduce((risk, h) => { const level = normalized(h.priority_level); return (levels[level] || 0) > (levels[risk] || 0) ? level : risk; }, 'None'); };
+  const roadsUrl = mapElement.dataset.roadsUrl;
+  const buildingsUrl = window.eBarangayConfig?.buildingsGeoJsonUrl;
   const mapTilerKey = window.eBarangayConfig?.mapTilerKey;
   const osmStyle = { version: 8, sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: '© OpenStreetMap contributors', maxzoom: 19 } }, layers: [{ id: 'osm', type: 'raster', source: 'osm' }] };
-  const mapStyle = mapTilerKey
-    ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${encodeURIComponent(mapTilerKey)}`
-    : osmStyle;
-  if (!mapTilerKey) console.warn('MAPTILER_API_KEY is not configured; using OpenStreetMap fallback.');
+  const satelliteStyle = { version: 8, sources: { satellite: { type: 'raster', tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize: 256, attribution: 'Esri' } }, layers: [{ id: 'satellite', type: 'raster', source: 'satellite' }] };
+  const mapStyle = satelliteStyle;
   let map;
   try { map = new maplibregl.Map({ container: mapElement, style: mapStyle, center: [120.6732, 13.9965], zoom: 14.5, attributionControl: true }); } catch (error) { console.warn('MapLibre initialization failed; using Leaflet fallback.', error); renderDrrmMapLegacy(); return; }
   map.on('error', event => { if (event?.error) console.warn('DRRM MapLibre error:', event.error); });
@@ -1590,10 +1627,80 @@ function renderDrrmMap() {
   const popup = (html, coordinates) => new maplibregl.Popup({ offset: 12, maxWidth: '320px' }).setLngLat(coordinates).setHTML(html).addTo(map);
   const householdPopup = h => `<b>${escapeHtml(h.household_number)}</b><br>${escapeHtml(h.address || '')}<br>Sitio/Purok: ${escapeHtml(h.sitio || h.purok || 'Not specified')}<br>Priority: ${escapeHtml(h.priority_level || 'Not set')}<hr>Residents: ${h.resident_count || 0}<br>Seniors: ${h.senior_count || 0} · PWD: ${h.pwd_count || 0}<br>Bedridden: ${h.bedridden_count || 0} · Pregnant: ${h.pregnant_count || 0}<br>Infants: ${h.infant_count || 0}`;
   const centerPopup = c => { const cap = Number(c.capacity || 0); const occ = Number(c.current_occupants || 0); return `<b>${escapeHtml(c.name)}</b><br>${escapeHtml(c.address || '')}<hr>Capacity: ${cap || 'Not set'}<br>Occupied: ${occ}<br>Available: ${cap ? Math.max(0, cap - occ) : 'Not set'}<br>Status: ${escapeHtml(c.status || (cap && cap <= occ ? 'Full' : 'Open'))}`; };
+  const enhanceRoadVisibility = () => {
+    // MapTiler's Streets style already contains the road network as vector
+    // layers. Render the road network in black so it matches the DRRM map
+    // reference and stays legible over satellite/street imagery.
+    const styleLayers = map.getStyle()?.layers || [];
+    styleLayers.forEach(layer => {
+      const layerId = String(layer.id || '').toLowerCase();
+      const sourceLayer = String(layer['source-layer'] || '').toLowerCase();
+      const roadText = `${layerId} ${sourceLayer}`;
+      const isRoad = layer.type === 'line' && (
+        /(^|[-_])(road|street|highway|path|track|service|motorway|trunk|primary|secondary|tertiary|minor)([-_]|$)/.test(roadText)
+        || roadText.includes('transportation')
+        || roadText.includes('road-')
+      );
+      if (!isRoad || layer.type !== 'line') return;
+      try {
+        const isPath = roadText.includes('path') || roadText.includes('track');
+        const isMajor = /highway|motorway|trunk|primary|major/.test(roadText);
+        map.setPaintProperty(layer.id, 'line-opacity', isPath ? 0.9 : 0.96);
+        map.setPaintProperty(layer.id, 'line-color', '#ffffff');
+        if (isPath) {
+          map.setPaintProperty(layer.id, 'line-width', ['interpolate', ['linear'], ['zoom'], 12, 0.9, 16, 2.4]);
+        } else if (isMajor) {
+          map.setPaintProperty(layer.id, 'line-width', ['interpolate', ['linear'], ['zoom'], 10, 1.6, 16, 4.2]);
+        } else {
+          map.setPaintProperty(layer.id, 'line-width', ['interpolate', ['linear'], ['zoom'], 12, 1.1, 16, 2.8]);
+        }
+      } catch (error) { console.debug('Unable to tune road layer', layer.id, error); }
+    });
+  };
   const addMarkers = () => { households.forEach(h => { if (h.latitude == null || h.longitude == null) return; const el = document.createElement('button'); el.type = 'button'; el.className = `drrm-map-marker priority-${String(h.priority_level || 'low').toLowerCase()}`; el.title = h.household_number || 'Household'; el.addEventListener('click', event => { event.stopPropagation(); popup(householdPopup(h), [Number(h.longitude), Number(h.latitude)]); }); householdMarkers.push(new maplibregl.Marker({ element: el }).setLngLat([Number(h.longitude), Number(h.latitude)]).addTo(map)); }); centers.forEach(c => { if (c.latitude == null || c.longitude == null) return; const el = document.createElement('button'); el.type = 'button'; el.className = 'drrm-map-marker evacuation'; el.title = c.name || 'Evacuation center'; el.addEventListener('click', event => { event.stopPropagation(); popup(centerPopup(c), [Number(c.longitude), Number(c.latitude)]); }); centerMarkers.push(new maplibregl.Marker({ element: el }).setLngLat([Number(c.longitude), Number(c.latitude)]).addTo(map)); }); };
   const fit = () => { const points = [...householdData.features, ...centerData.features]; if (!points.length) return; const bounds = points.reduce((b, f) => b.extend(f.geometry.coordinates), new maplibregl.LngLatBounds(points[0].geometry.coordinates, points[0].geometry.coordinates)); map.fitBounds(bounds, { padding: 80, maxZoom: 16 }); };
   const householdLayer = { addLayer: marker => marker.addTo(map), removeLayer: marker => marker.remove() };
   window.drrmMapActions = { map, householdLayer, householdMarkers, centerLayer: { addLayer: marker => marker.addTo(map), removeLayer: marker => marker.remove() }, centerMarkers, setMode, fit, locate: () => navigator.geolocation?.getCurrentPosition(pos => map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 17 }), () => toast('Location access was not available.')) };
   map.on('click', event => { if (mode === 'select-center') { drrmCenterLocationReady = true; drrmPickedLocation = { latitude: event.lngLat.lat, longitude: event.lngLat.lng }; setMode('view'); popup('<b>Evacuation center location selected</b><br>Click + Add Center again to continue.', [event.lngLat.lng, event.lngLat.lat]); return; } if (mode === 'select') { drrmPickedLocation = { latitude: event.lngLat.lat, longitude: event.lngLat.lng }; setMode('view'); popup('<b>Selected location</b><br>Click Add Household to use this point.', [event.lngLat.lng, event.lngLat.lat]); } });
-  map.on('load', () => { map.addSource('households', { type: 'geojson', data: householdData }); map.addSource('evacuation-centers', { type: 'geojson', data: centerData }); map.addLayer({ id: 'household-points', type: 'circle', source: 'households', paint: { 'circle-radius': 7, 'circle-color': ['match', ['get', 'priority_level'], 'Critical', '#dc2626', 'High', '#ea580c', 'Moderate', '#ca8a04', '#16a34a'], 'circle-stroke-color': '#fff', 'circle-stroke-width': 2 } }); map.addLayer({ id: 'center-points', type: 'circle', source: 'evacuation-centers', paint: { 'circle-radius': 9, 'circle-color': '#1674ed', 'circle-stroke-color': '#fff', 'circle-stroke-width': 3 } }); addMarkers(); requestAnimationFrame(() => { map.resize(); fit(); }); });
+  map.on('load', async () => {
+    enhanceRoadVisibility();
+    if (roadsUrl) {
+      try {
+        const roads = await fetch(roadsUrl).then(response => {
+          if (!response.ok) throw new Error(`Roads request failed: ${response.status}`);
+          return response.json();
+        });
+        map.addSource('drrm-roads', { type: 'geojson', data: roads });
+        const roadWidth = ['interpolate', ['linear'], ['zoom'], 10, 1.5, 14, 3, 18, 5];
+        map.addLayer({ id: 'drrm-roads-white', type: 'line', source: 'drrm-roads', paint: {
+          'line-color': '#ffffff', 'line-opacity': 0.96,
+          'line-width': roadWidth
+        } });
+      } catch (error) { console.warn('Unable to load DRRM roads GeoJSON:', error); }
+    }
+    if (buildingsUrl) {
+      try {
+        const buildings = await fetch(buildingsUrl).then(response => {
+          if (!response.ok) throw new Error(`Buildings request failed: ${response.status}`);
+          return response.json();
+        });
+        const riskBuildings = { ...buildings, features: (buildings.features || []).map(feature => ({ ...feature, properties: { ...(feature.properties || {}), risk_level: buildingRisk(feature) } })) };
+        map.addSource('drrm-buildings', { type: 'geojson', data: riskBuildings });
+        map.addLayer({ id: 'drrm-buildings-fill', type: 'fill', source: 'drrm-buildings', paint: {
+          'fill-color': ['match', ['get', 'risk_level'], 'Critical', '#dc2626', 'High', '#ea580c', 'Moderate', '#eab308', 'Low', '#16a34a', '#cbd5e1'],
+          'fill-opacity': ['match', ['get', 'risk_level'], 'None', 0.12, 0.72]
+        } });
+        map.addLayer({ id: 'drrm-buildings-outline', type: 'line', source: 'drrm-buildings', paint: {
+          'line-color': '#f59e0b', 'line-opacity': 0.9, 'line-width': 1
+        } });
+        map.on('click', 'drrm-buildings-fill', event => {
+          drrmPickedLocation = { latitude: event.lngLat.lat, longitude: event.lngLat.lng };
+          popup('<b>Building selected</b><br><button class="primary-btn sm" data-action="new-household" data-building-add="true">Add Household</button>', [event.lngLat.lng, event.lngLat.lat]);
+        });
+        map.on('mouseenter', 'drrm-buildings-fill', () => { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', 'drrm-buildings-fill', () => { if (mode === 'view') map.getCanvas().style.cursor = ''; });
+      } catch (error) { console.warn('Unable to load DRRM buildings GeoJSON:', error); }
+    }
+    map.addSource('households', { type: 'geojson', data: householdData }); map.addSource('evacuation-centers', { type: 'geojson', data: centerData }); map.addLayer({ id: 'center-points', type: 'circle', source: 'evacuation-centers', paint: { 'circle-radius': 9, 'circle-color': '#1674ed', 'circle-stroke-color': '#fff', 'circle-stroke-width': 3 } }); requestAnimationFrame(() => { map.resize(); fit(); });
+  });
 }

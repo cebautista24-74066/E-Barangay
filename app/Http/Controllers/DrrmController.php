@@ -80,7 +80,26 @@ public function storeCenter(Request $request): JsonResponse
         return response()->json(['household' => $household->fresh('members')]);
     }
 
-    public function destroyHousehold(Request $request, DrrmHousehold $household): JsonResponse { $this->admin($request); $household->delete(); Log::info('DRRM household permanently deleted', ['user_id' => $request->user()->id, 'household_id' => $household->id]); return response()->json(['message' => 'Household deleted.']); }
+    public function destroyHousehold(Request $request, DrrmHousehold $household): JsonResponse
+    {
+        $this->admin($request);
+        $householdId = $household->id;
+        DB::transaction(function () use ($householdId, $household) {
+            $records = DrrmEvacuationRecord::where('household_id', $householdId)->lockForUpdate()->get();
+            foreach ($records->where('status', 'Checked In') as $record) {
+                $center = DrrmEvacuationCenter::whereKey($record->evacuation_center_id)->lockForUpdate()->first();
+                if ($center) {
+                    $center->current_occupants = max(0, (int) $center->current_occupants - (int) $record->member_count);
+                    $center->status = $center->capacity !== null && $center->current_occupants >= $center->capacity ? 'Full' : 'Open';
+                    $center->save();
+                }
+            }
+            DrrmEvacuationRecord::where('household_id', $householdId)->delete();
+            $household->delete();
+        });
+        Log::info('DRRM household permanently deleted', ['user_id' => $request->user()->id, 'household_id' => $householdId]);
+        return response()->json(['message' => 'Household deleted.']);
+    }
 
     public function updateCenter(Request $request, DrrmEvacuationCenter $center): JsonResponse
     {

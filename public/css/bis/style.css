@@ -5433,6 +5433,8 @@ b {
 .drrm-legend > b {
     color: var(--ink, #0f172a);
 }
+.legend-line { display:inline-block; width:22px; height:3px; margin-right:6px; vertical-align:middle; background:#fff; border:1px solid #94a3b8; }
+.legend-building { display:inline-block; width:14px; height:14px; margin-right:6px; vertical-align:middle; background:rgba(248,250,252,.75); border:1px solid #334155; }
 .legend-dot {
     display: inline-block;
     width: 10px;
@@ -8010,4 +8012,13 @@ body.dark-mode #modalLayer .drrm-household-modal { border-color: #3a5872; }
 .drrm-map-marker.priority-high { background: #ea580c; }
 .drrm-map-marker.priority-moderate { background: #ca8a04; }
 .drrm-map-marker.priority-low { background: #16a34a; }
+#drrmMap .leaflet-overlay-pane circle { transform: scale(.45); transform-box: fill-box; transform-origin: center; }
+#drrmMap .drrm-map-marker.priority-critical,
+#drrmMap .drrm-map-marker.priority-high,
+#drrmMap .drrm-map-marker.priority-moderate,
+#drrmMap .drrm-map-marker.priority-low { width: 8px; height: 8px; border-width: 1px; }
+.drrm-map-marker.priority-critical,
+.drrm-map-marker.priority-high,
+.drrm-map-marker.priority-moderate,
+.drrm-map-marker.priority-low { display: none; }
 .drrm-map-marker.evacuation { width: 22px; height: 22px; border-radius: 7px; background: #1674ed; }
