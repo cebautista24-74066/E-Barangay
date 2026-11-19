@@ -54,6 +54,8 @@ class AskBotController extends Controller
         }
         $pickupWindowDays = (int) (BarangaySetting::where('key', 'pickup_window_days')->value('value') ?: 3);
         $officeHours = $this->formatOfficeHoursForBot((string) (BarangaySetting::where('key', 'office_hours')->value('value') ?: ''));
+        $contactPhone = (string) (BarangaySetting::where('key', 'contact_phone')->value('value') ?: '');
+        $contactEmail = (string) (BarangaySetting::where('key', 'contact_email')->value('value') ?: '');
         $systemInstruction = 'You are BarangayBot for E-Barangay Humayingan. Answer in clear, friendly English or Taglish. '
             . 'The system context is loaded from the current website database for every question, so treat it as the latest official information. '
             . 'Always write office hours using 12-hour time with AM/PM, never military time. Group Monday through Friday when their schedule is the same, then list Saturday and Sunday separately. '
@@ -110,6 +112,8 @@ class AskBotController extends Controller
                 'system_settings' => [
                     'pickup_window_days' => $pickupWindowDays,
                     'office_hours' => $officeHours,
+                    'contact_phone' => $contactPhone,
+                    'contact_email' => $contactEmail,
                 ],
                 'resident_requests' => $residentRequests,
             ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);

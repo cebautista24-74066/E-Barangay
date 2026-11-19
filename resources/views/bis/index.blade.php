@@ -23,6 +23,7 @@
         <a href="#about">About E-Barangay</a>
         <a href="#services">Service Features</a>
         <a href="#how-it-works">How It Works</a>
+        <a href="#contact">Contact Us</a>
       </nav>
       <div class="public-nav-actions">
         <button class="theme-toggle" id="themeToggleLanding" type="button" aria-label="Switch to dark mode" title="Switch to dark mode">☼</button>
@@ -117,6 +118,18 @@
     <section id="community" class="public-cta">
       <div><span class="public-eyebrow"><i></i> E-BARANGAY HUMAYINGAN</span><h2>Find service information and follow your request online.</h2><p>Sign in to access resident services. Available services, requirements, and procedures are published by the barangay.</p></div>
       <button class="primary-btn public-login-trigger" type="button">Resident Login <span>→</span></button>
+    </section>
+
+    <section id="contact" class="public-contact">
+      <div>
+        <span class="public-eyebrow dark-eyebrow"><i></i> CONTACT US</span>
+        <h2>Reach the Barangay Office.</h2>
+        <p>For questions and assistance, contact Barangay Humayingan through the details below.</p>
+      </div>
+      <div class="public-contact-details">
+        <div id="landingContactPhone" class="public-contact-item"><span aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M7.2 3.5 4.8 5.2c-.8.6-.9 1.7-.5 2.6 2.1 5.1 6.2 9.2 11.3 11.3.9.4 2 .2 2.6-.5l1.7-2.4c.5-.7.3-1.7-.4-2.2l-2.5-1.7c-.6-.4-1.4-.3-1.9.2l-1 1c-2.1-1.1-3.8-2.8-4.9-4.9l1-1c.5-.5.6-1.3.2-1.9L8.9 3.9c-.4-.7-1.4-.9-1.7-.4Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span><strong>Phone number</strong><small>{{ $contactPhone ?: 'Contact details will be published here.' }}</small></div>
+        <div id="landingContactEmail" class="public-contact-item"><span aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="5.5" width="17" height="13" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="m5 7 7 5.5L19 7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><strong>Email address</strong><small>{{ $contactEmail ?: 'Contact details will be published here.' }}</small></div>
+      </div>
     </section>
 
     <footer class="public-footer">

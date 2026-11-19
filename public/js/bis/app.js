@@ -599,7 +599,7 @@ function settingsPage() {
   const officeSchedule = Object.fromEntries(officeHours.split(/\r?\n/).map(line => { const match = line.match(/^([^:]+):\s*(.*)$/); return match ? [match[1], match[2]] : null; }).filter(Boolean));
   const officeGroups = [{ label: "Monday–Friday", days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"] }, { label: "Saturday", days: ["Saturday"] }, { label: "Sunday", days: ["Sunday"] }];
   const officeRows = officeGroups.map(group => { const value = officeSchedule[group.days.find(day => officeSchedule[day])] || ""; const closed = value.toLowerCase() === "closed"; const times = value.match(/(\d{2}:\d{2}).*?(\d{2}:\d{2})/); const key = group.days.join(","); return `<div class="office-hours-row"><b>${group.label}</b><label><input type="checkbox" data-office-closed="${key}" ${closed ? "checked" : ""}> Closed</label><input class="form-control" type="time" data-office-start="${key}" value="${times?.[1] || ""}" aria-label="${group.label} opening time"><span>to</span><input class="form-control" type="time" data-office-end="${key}" value="${times?.[2] || ""}" aria-label="${group.label} closing time"></div>`; }).join("");
-  const pickupSettings = mode === "admin" ? `<h3 style="margin-top:24px">Barangay information</h3><form id="pickupWindowForm" class="form-grid"><div class="form-field"><label>Pickup window (days)</label><input class="form-control" type="number" name="pickup_window_days" min="1" max="30" value="${pickup}" required></div><div class="form-field full"><label>Office hours</label><div class="office-hours-picker">${officeRows}</div><input type="hidden" name="office_hours" id="officeHoursValue"></div><div class="form-field"><button class="primary-btn sm" type="submit">Save barangay information</button></div><p class="auth-feedback" id="pickupWindowFeedback" role="alert"></p></form>` : "";
+  const pickupSettings = mode === "admin" ? `<h3 style="margin-top:24px">Barangay information</h3><form id="pickupWindowForm" class="form-grid"><div class="form-field"><label>Pickup window (days)</label><input class="form-control" type="number" name="pickup_window_days" min="1" max="30" value="${pickup}" required></div><div class="form-field full"><label>Office hours</label><div class="office-hours-picker">${officeRows}</div><input type="hidden" name="office_hours" id="officeHoursValue"></div><div class="form-field"><label>Phone number</label><input class="form-control" type="tel" name="contact_phone" value="${escapeHtml(pageData.contact_phone || "")}" placeholder="e.g. 0917 123 4567"></div><div class="form-field"><label>Email address</label><input class="form-control" type="email" name="contact_email" value="${escapeHtml(pageData.contact_email || "")}" placeholder="e.g. barangay@example.com"></div><div class="form-field"><button class="primary-btn sm" type="submit">Save barangay information</button></div><p class="auth-feedback" id="pickupWindowFeedback" role="alert"></p></form>` : "";
   return `${heading("Settings", "Account and display preferences.")}<section class="panel"><h3>Display</h3><p class="muted" style="margin-top:8px">Your light or dark theme preference is saved in this browser.</p><button class="secondary-btn" data-action="toggle-theme">Switch theme</button>${pickupSettings}
     ${adminTools}</section>`;
 }
@@ -642,7 +642,7 @@ async function loadPageData() {
       pageData.drrm = (await api("/api/admin/drrm")).data;
       return;
     case "Settings":
-      if (mode === "admin") { const [admins, settings] = await Promise.all([api("/api/admin/users/admins"), api("/api/admin/settings")]); pageData.admins = admins.data.admins; pageData.pickup_window_days = settings.data.pickup_window_days; pageData.office_hours = settings.data.office_hours || ""; }
+      if (mode === "admin") { const [admins, settings] = await Promise.all([api("/api/admin/users/admins"), api("/api/admin/settings")]); pageData.admins = admins.data.admins; pageData.pickup_window_days = settings.data.pickup_window_days; pageData.office_hours = settings.data.office_hours || ""; pageData.contact_phone = settings.data.contact_phone || ""; pageData.contact_email = settings.data.contact_email || ""; }
       return;
     case "Manage Residents":
       pageData.residents = (await api("/api/residents")).data.residents;
@@ -1422,8 +1422,22 @@ function removeAskBot() {
   document.querySelector("#askbotPopup")?.remove();
 }
 
+async function loadLandingContact() {
+  const phone = document.querySelector("#landingContactPhone");
+  const email = document.querySelector("#landingContactEmail");
+  if (!phone || !email) return;
+  try {
+    const response = await fetch("/api/public/contact", { headers: { Accept: "application/json" } });
+    if (!response.ok) return;
+    const contact = await response.json();
+    if (contact.phone) phone.querySelector("small").textContent = contact.phone;
+    if (contact.email) email.querySelector("small").textContent = contact.email;
+  } catch (_) {}
+}
+
 applyTheme();
 if (!$("#landingView")?.classList.contains("hidden")) initAskBot();
+loadLandingContact();
 $$(".theme-toggle").forEach(button => button.addEventListener("click", toggleTheme));
 $("#loginForm").addEventListener("submit", event => {
   event.preventDefault();

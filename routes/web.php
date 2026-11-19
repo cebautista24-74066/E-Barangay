@@ -12,15 +12,21 @@ use App\Http\Controllers\ResidentFeedbackController;
 use App\Http\Controllers\ServiceRequestController;
 use App\Http\Controllers\BarangaySettingController;
 use App\Http\Controllers\AskBotController;
+use App\Models\BarangaySetting;
 use App\Http\Middleware\EnsureActiveAccount;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return view('bis.index');
+    return view('bis.index', [
+        'contactPhone' => BarangaySetting::where('key', 'contact_phone')->value('value') ?: '',
+        'contactEmail' => BarangaySetting::where('key', 'contact_email')->value('value') ?: '',
+    ]);
 });
 
 Route::post('/api/askbot', [AskBotController::class, 'ask'])
     ->middleware(['throttle:20,1']);
+
+Route::get('/api/public/contact', [BarangaySettingController::class, 'publicContact']);
 
 Route::post('/auth/register', [AuthController::class, 'register'])
     ->middleware('throttle:3,60')
