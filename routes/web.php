@@ -11,12 +11,16 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ResidentFeedbackController;
 use App\Http\Controllers\ServiceRequestController;
 use App\Http\Controllers\BarangaySettingController;
+use App\Http\Controllers\AskBotController;
 use App\Http\Middleware\EnsureActiveAccount;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('bis.index');
 });
+
+Route::post('/api/askbot', [AskBotController::class, 'ask'])
+    ->middleware(['throttle:20,1']);
 
 Route::post('/auth/register', [AuthController::class, 'register'])
     ->middleware('throttle:3,60')

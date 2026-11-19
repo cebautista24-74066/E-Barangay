@@ -306,6 +306,7 @@ function moduleCard(title, description, icon, target, metric, tone = "") {
 function login(user) {
   currentUser = user;
   mode = user.role === "Administrator" ? "admin" : "resident";
+  removeAskBot();
   $("#loginView").classList.add("hidden");
   $("#landingView").classList.add("hidden");
   $("#appView").classList.remove("hidden");
@@ -594,7 +595,11 @@ function settingsPage() {
   const adminList = admins.map(admin => { const isSelf = admin.email === currentUser?.email; const actions = isSelf ? `<small class="admin-current-label">Current account</small>` : `<div class="admin-account-actions">${button(admin.is_active ? "Deactivate" : "Activate", "toggle-admin", "secondary-btn sm", `data-id="${admin.id}"`)}${button("Delete", "delete-admin", "danger-btn sm", `data-id="${admin.id}"`)}</div>`; return `<div class="admin-account-row"><div><b>${escapeHtml(admin.name)}</b><small>${escapeHtml(admin.email)}</small></div><div class="admin-account-meta">${statusBadge(admin.is_active ? "Active" : "Inactive")}${actions}</div></div>`; }).join("");
   const adminTools = mode === "admin" ? `<h3 style="margin-top:24px">Administrator access</h3><p class="muted" style="margin-top:8px">Create and review trusted administrator accounts. This section is available only to current administrators.</p><button class="secondary-btn" data-action="new-admin">+ Add Administrator</button><div class="admin-account-list">${adminList || `<p class="muted">No administrator accounts found.</p>`}</div>` : "";
   const pickup = Number(pageData.pickup_window_days || 3);
-  const pickupSettings = mode === "admin" ? `<h3 style="margin-top:24px">Request pickup window</h3><p class="muted" style="margin-top:8px">Requests will automatically expire this many calendar days after they become Ready for Pickup.</p><form id="pickupWindowForm" class="form-grid"><div class="form-field"><label>Pickup window (days)</label><input class="form-control" type="number" name="pickup_window_days" min="1" max="30" value="${pickup}" required></div><div class="form-field"><button class="primary-btn sm" type="submit">Save pickup window</button></div><p class="auth-feedback" id="pickupWindowFeedback" role="alert"></p></form>` : "";
+  const officeHours = pageData.office_hours || "";
+  const officeSchedule = Object.fromEntries(officeHours.split(/\r?\n/).map(line => { const match = line.match(/^([^:]+):\s*(.*)$/); return match ? [match[1], match[2]] : null; }).filter(Boolean));
+  const officeGroups = [{ label: "Monday–Friday", days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"] }, { label: "Saturday", days: ["Saturday"] }, { label: "Sunday", days: ["Sunday"] }];
+  const officeRows = officeGroups.map(group => { const value = officeSchedule[group.days.find(day => officeSchedule[day])] || ""; const closed = value.toLowerCase() === "closed"; const times = value.match(/(\d{2}:\d{2}).*?(\d{2}:\d{2})/); const key = group.days.join(","); return `<div class="office-hours-row"><b>${group.label}</b><label><input type="checkbox" data-office-closed="${key}" ${closed ? "checked" : ""}> Closed</label><input class="form-control" type="time" data-office-start="${key}" value="${times?.[1] || ""}" aria-label="${group.label} opening time"><span>to</span><input class="form-control" type="time" data-office-end="${key}" value="${times?.[2] || ""}" aria-label="${group.label} closing time"></div>`; }).join("");
+  const pickupSettings = mode === "admin" ? `<h3 style="margin-top:24px">Barangay information</h3><form id="pickupWindowForm" class="form-grid"><div class="form-field"><label>Pickup window (days)</label><input class="form-control" type="number" name="pickup_window_days" min="1" max="30" value="${pickup}" required></div><div class="form-field full"><label>Office hours</label><div class="office-hours-picker">${officeRows}</div><input type="hidden" name="office_hours" id="officeHoursValue"></div><div class="form-field"><button class="primary-btn sm" type="submit">Save barangay information</button></div><p class="auth-feedback" id="pickupWindowFeedback" role="alert"></p></form>` : "";
   return `${heading("Settings", "Account and display preferences.")}<section class="panel"><h3>Display</h3><p class="muted" style="margin-top:8px">Your light or dark theme preference is saved in this browser.</p><button class="secondary-btn" data-action="toggle-theme">Switch theme</button>${pickupSettings}
     ${adminTools}</section>`;
 }
@@ -637,7 +642,7 @@ async function loadPageData() {
       pageData.drrm = (await api("/api/admin/drrm")).data;
       return;
     case "Settings":
-      if (mode === "admin") { const [admins, settings] = await Promise.all([api("/api/admin/users/admins"), api("/api/admin/settings")]); pageData.admins = admins.data.admins; pageData.pickup_window_days = settings.data.pickup_window_days; }
+      if (mode === "admin") { const [admins, settings] = await Promise.all([api("/api/admin/users/admins"), api("/api/admin/settings")]); pageData.admins = admins.data.admins; pageData.pickup_window_days = settings.data.pickup_window_days; pageData.office_hours = settings.data.office_hours || ""; }
       return;
     case "Manage Residents":
       pageData.residents = (await api("/api/residents")).data.residents;
@@ -1323,7 +1328,102 @@ function handleActionClick(element) {
   action(element.dataset.action, element).catch(error => toast(error.message || "The action could not be completed."));
 }
 
+const askBotPrompts = [
+  "How do I create an account?", "What services are available?", "How do I submit a request?",
+  "What documents do I need?", "How do I track my request?", "What are the office hours?",
+  "Are there any new announcements?", "How do I reset my password?", "How long does approval take?",
+  "Where can I get a Barangay Clearance?", "How do I contact the Barangay Office?",
+  "What should I do if my request is rejected?", "How do I submit a complaint?",
+  "What community events are coming up?", "Is there a fee for this service?",
+  "How do I update my profile?", "What does Ready for Pickup mean?",
+  "Can I check my request status online?"
+];
+
+function renderAskBotSuggestions(exclude = "") {
+  const container = document.querySelector("#askbotSuggestions");
+  if (!container) return;
+  const choices = askBotPrompts.filter(prompt => prompt !== exclude).sort(() => Math.random() - 0.5).slice(0, 2);
+  container.innerHTML = choices.map(prompt => `<button class="askbot-suggestion" type="button">${escapeHtml(prompt)}</button>`).join("");
+  container.querySelectorAll(".askbot-suggestion").forEach(button => {
+    button.addEventListener("click", () => {
+      container.innerHTML = "";
+      sendAskBotMessage(button.textContent);
+    });
+  });
+}
+
+function openAskBot() {
+  let popup = document.querySelector("#askbotPopup");
+  if (!popup) {
+    popup = document.createElement("section");
+    popup.id = "askbotPopup";
+    popup.className = "askbot-popup";
+    popup.innerHTML = `<div class="askbot-head"><div class="askbot-avatar">✦</div><div><strong>Ask BarangayBot</strong><small>Barangay services assistant</small></div><button class="askbot-close" type="button" aria-label="Close chat">×</button></div><div class="askbot-body"><div class="askbot-messages" id="askbotMessages"><div class="askbot-message">Hi! I’m BarangayBot. How can I help you today?</div></div><div class="askbot-suggestions"><button class="askbot-suggestion" type="button">Barangay clearance requirements</button><button class="askbot-suggestion" type="button">How do I track my request?</button></div><form class="askbot-form" id="askbotForm"><input id="askbotInput" placeholder="Type your question..." autocomplete="off"><button type="submit">Send</button></form></div>`;
+    document.body.appendChild(popup);
+    popup.querySelector(".askbot-close").addEventListener("click", closeAskBot);
+    popup.querySelector(".askbot-suggestions").id = "askbotSuggestions";
+    popup.querySelector("#askbotForm").addEventListener("submit", event => { event.preventDefault(); sendAskBotMessage(popup.querySelector("#askbotInput").value); });
+  }
+  renderAskBotSuggestions();
+  popup.classList.add("is-open");
+  document.querySelector("#askbotLauncher")?.classList.add("is-hidden");
+  popup.querySelector("#askbotInput")?.focus();
+}
+
+function formatAskBotReply(reply) {
+  let formatted = String(reply || "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/(^|\n)\s*\*\s+/g, "$1• ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if (/:\s*-\s*/.test(formatted)) {
+    formatted = formatted.replace(/:\s*-\s*/, ":\n• ").replace(/\s+-\s+/g, "\n• ");
+  }
+  return formatted;
+}
+
+function closeAskBot() {
+  document.querySelector("#askbotPopup")?.classList.remove("is-open");
+  document.querySelector("#askbotLauncher")?.classList.remove("is-hidden");
+}
+
+async function sendAskBotMessage(message) {
+  const text = String(message || "").trim();
+  if (!text) return;
+  const messages = document.querySelector("#askbotMessages");
+  const history = [...messages.querySelectorAll(".askbot-message")].map(node => ({ role: node.classList.contains("user") ? "user" : "model", text: node.textContent })).slice(-10);
+  messages.insertAdjacentHTML("beforeend", `<div class="askbot-message user">${escapeHtml(text)}</div><div class="askbot-message" data-typing>Thinking...</div>`);
+  document.querySelector("#askbotInput").value = "";
+  messages.scrollTop = messages.scrollHeight;
+  try {
+    const { data } = await api("/api/askbot", { method: "POST", body: JSON.stringify({ message: text, history }) });
+    messages.querySelector("[data-typing]")?.replaceWith(Object.assign(document.createElement("div"), { className: "askbot-message", textContent: formatAskBotReply(data.reply) }));
+    renderAskBotSuggestions(text);
+  } catch (error) {
+    messages.querySelector("[data-typing]")?.replaceWith(Object.assign(document.createElement("div"), { className: "askbot-message", textContent: error.message || "I’m unable to answer right now. Please contact the Barangay Office." }));
+  }
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function initAskBot() {
+  if (document.querySelector("#askbotLauncher")) return;
+  // Keep the BarangayBot branding visible, but disable the AI chat for residents.
+  const launcher = document.createElement("div");
+  launcher.id = "askbotLauncher";
+  launcher.className = "askbot-launcher";
+  launcher.setAttribute("aria-label", "Ask BarangayBot");
+  launcher.addEventListener("click", openAskBot);
+  launcher.textContent = "✦ Ask BarangayBot";
+  document.body.appendChild(launcher);
+}
+
+function removeAskBot() {
+  document.querySelector("#askbotLauncher")?.remove();
+  document.querySelector("#askbotPopup")?.remove();
+}
+
 applyTheme();
+if (!$("#landingView")?.classList.contains("hidden")) initAskBot();
 $$(".theme-toggle").forEach(button => button.addEventListener("click", toggleTheme));
 $("#loginForm").addEventListener("submit", event => {
   event.preventDefault();
@@ -1386,6 +1486,7 @@ $("#resetPasswordForm").addEventListener("submit", async event => {
 });
 $$(".public-login-trigger, .public-login-trigger-link").forEach(control => control.addEventListener("click", event => {
   event.preventDefault();
+  removeAskBot();
   $("#landingView").classList.add("hidden");
   $("#loginView").classList.remove("hidden");
   $("#loginName").focus({ preventScroll: true });
@@ -1401,6 +1502,7 @@ $(".password-toggle").addEventListener("click", event => {
 $("#backToLanding").addEventListener("click", () => {
   $("#loginView").classList.add("hidden");
   $("#landingView").classList.remove("hidden");
+  initAskBot();
   window.scrollTo(0, 0);
 });
 $("#registerLink").addEventListener("click", event => {
@@ -1424,6 +1526,7 @@ $("#resetLoginLink").addEventListener("click", event => {
 $(".auth-back-home").addEventListener("click", () => {
   $("#loginView").classList.add("hidden");
   $("#landingView").classList.remove("hidden");
+  initAskBot();
   window.scrollTo(0, 0);
   showLoginForm();
 });
@@ -1466,6 +1569,7 @@ $("#logoutBtn").addEventListener("click", async () => {
     $("#appView").classList.add("hidden");
     $("#landingView").classList.remove("hidden");
     $("#loginView").classList.add("hidden");
+    initAskBot();
     $("#loginName").value = "";
     $("#loginPassword").value = "";
     showLoginForm();
@@ -1522,7 +1626,15 @@ $("#pageContent").addEventListener("submit", async event => {
   if (form.id === "pickupWindowForm") {
     event.preventDefault();
     const feedback = $("#pickupWindowFeedback");
-    try { await api("/api/admin/settings", { method: "PATCH", body: JSON.stringify(Object.fromEntries(new FormData(form))) }); toast("Pickup window saved."); await render(); }
+    const officeHours = [...form.querySelectorAll("[data-office-start]")].flatMap(start => {
+      const days = start.dataset.officeStart.split(",");
+      const end = form.querySelector(`[data-office-end="${start.dataset.officeStart}"]`);
+      const closed = form.querySelector(`[data-office-closed="${start.dataset.officeStart}"]`)?.checked;
+      const schedule = closed ? "Closed" : (start.value && end?.value ? `${start.value}–${end.value}` : "");
+      return schedule ? days.map(day => `${day}: ${schedule}`) : [];
+    }).join("\n");
+    form.querySelector("#officeHoursValue").value = officeHours;
+    try { await api("/api/admin/settings", { method: "PATCH", body: JSON.stringify(Object.fromEntries(new FormData(form))) }); toast("Barangay information saved."); await render(); }
     catch (error) { feedback.textContent = error.message || "Unable to save pickup window."; }
     return;
   }
